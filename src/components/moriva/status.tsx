@@ -43,11 +43,13 @@ export function InlineNotice({
   title,
   children,
   className,
+  role,
 }: {
   kind?: "info" | "warning" | "success" | "critical";
   title?: string;
   children?: React.ReactNode;
   className?: string;
+  role?: "alert" | "status" | "note";
 }) {
   const map = {
     info: { cls: "border-moriva-teal/30 bg-[#E7F3EF] text-moriva-ink", Icon: Info },
@@ -56,8 +58,9 @@ export function InlineNotice({
     critical: { cls: "border-state-critical/40 bg-[#FAEBEC] text-state-critical", Icon: XCircle },
   } as const;
   const { cls, Icon } = map[kind];
+  const roleAttr = role ?? (kind === "critical" ? "alert" : "status");
   return (
-    <div role={kind === "critical" ? "alert" : "status"} className={cn("flex items-start gap-2 rounded-lg border px-3 py-2", cls, className)}>
+    <div role={roleAttr} className={cn("flex items-start gap-2 rounded-lg border px-3 py-2", cls, className)}>
       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
       <div className="text-sm">
         {title && <p className="font-semibold">{title}</p>}

@@ -15,7 +15,7 @@ import { SYNTHETIC_TRIGGER_THRESHOLD } from "./scoring";
 export async function getActiveInstrument(locale = "en") {
   const instrument = await db.instrument.findFirst({
     where: { status: { in: ["ACTIVE", "SIMULATION_ONLY"] } },
-    include: { versions: { orderBy: { createdAt: "desc" }, take: 1 } },
+    include: { versions: { orderBy: { effectiveAt: "desc" }, take: 1 } },
   });
   if (!instrument || instrument.versions.length === 0) return null;
   const version = instrument.versions[0];

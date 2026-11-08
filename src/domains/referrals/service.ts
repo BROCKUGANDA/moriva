@@ -147,6 +147,17 @@ export async function createReferral(input: CreateReferralInput): Promise<{ refe
     outcome: "ALLOW", metadata: { providerId: service.providerId, demo: service.provider.demoData },
   });
 
+  // Simulated routing: demo providers get an automatic assignment to the demo clinician so the
+  // professional workspace can demonstrate the flow. Clearly labelled simulated — never a real routing decision.
+  if (service.provider.demoData) {
+    const demoClinician = await db.user.findFirst({ where: { role: "PROFESSIONAL_SIMULATED", demoData: true } });
+    if (demoClinician) {
+      await db.referralAssignment.create({
+        data: { referralId: referral.id, organisationId: service.provider.organisationId, professionalId: demoClinician.id },
+      });
+    }
+  }
+
   // 5. simulated delivery (no external transport exists — labelled, never real)
   await simulateDelivery(referral.id, service.provider.demoData);
 
@@ -321,7 +332,6 @@ export async function getOwnedReferral(userId: string, referralId: string) {
       providerService: { include: { provider: true } },
       events: { orderBy: { occurredAt: "asc" } },
       assignments: true,
-      result: false,
     },
   });
   if (!r || r.userId !== userId) throw new MorivaError("RESOURCE_NOT_FOUND");
