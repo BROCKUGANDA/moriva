@@ -10,7 +10,7 @@ import { InlineNotice, StatusBadge, SimulationBanner } from "@/components/moriva
 import { GlyphConsentKey } from "@/components/moriva/glyphs";
 
 type Preview = {
-  recipient: { providerDisplayName: string; legalName: string; verificationStatus: string; demoData: boolean; serviceName: string; serviceLocation: string };
+  recipient: { providerId: string; providerDisplayName: string; legalName: string; verificationStatus: string; demoData: boolean; serviceName: string; serviceLocation: string };
   fields: Array<{ code: string; description: string; value: string | null }>;
   purpose: string;
   dataCategories: string[];

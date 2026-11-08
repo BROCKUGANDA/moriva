@@ -22,7 +22,7 @@
 | 13 | Test suite + quality gates | **DONE** | 50/50 unit + 29/29 integration + lint 0 + tsc clean; Playwright gap documented |
 | 14 | Deployment preparation | **DONE (docs + env)** | `.env.example`, `docs/DEPLOYMENT.md`; production BLOCKED behind pilot gates |
 | 15 | Documentation package | **DONE** | README, PRD, ARCHITECTURE, API, ERROR_CATALOG, DATA_DICTIONARY, TEST_REPORT, DEMO_SCRIPT, KNOWN_LIMITATIONS, DEPLOYMENT, THREAT_MODEL, CLINICAL_SAFETY_BOUNDARIES, DECISIONS, ADRs |
-| 16 | Final acceptance walkthrough | **DONE** | agent-browser journey evidence below |
+| 16 | Final acceptance walkthrough | **DONE** | agent-browser (2026-11-08): landing → individual login → assessment (all 5 items, save/resume, skip-ahead) → result 8/15 DEMO_MIXED with limitations → support options (Rules v2026.11-demo + rationale) → provider profile (SIMULATED badge) → exact share preview (fields+values) → consented referral created → timeline evidence SIMULATED → professional login → assigned inbox → acknowledge → appointment scheduled → ops outcomes (source chips: simulated/patient-reported) → Help Now (999 + 800-SAKINA + verified sources) → urgent-risk item "Yes, with some intent" **interrupted flow and redirected to /help-now** → mobile 390px viewport verified → RTL verified server-side → keyboard skip-link verified → zero console errors (one Next.js scroll-behavior advisory fixed) |
 
 ## Blocked register (named decisions absent — never invented)
 

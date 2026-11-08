@@ -43,7 +43,7 @@ export default async function RootLayout({
   const locale = jar.get("moriva_locale")?.value ?? "en";
   const dir = isRtl(locale) ? "rtl" : "ltr";
   return (
-    <html lang={locale} dir={dir} className={`${manrope.variable} ${inter.variable}`}>
+    <html lang={locale} dir={dir} data-scroll-behavior="smooth" className={`${manrope.variable} ${inter.variable}`}>
       <body className="min-h-screen flex flex-col antialiased">
         <LocaleProvider initialLocale={locale}>
           <a
