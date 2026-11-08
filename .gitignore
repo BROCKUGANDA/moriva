@@ -10,3 +10,7 @@ tool-results/
 .zscripts/
 skills/
 *.tsbuildinfo
+# env files — never commit real values (AC-TE-07)
+.env
+.env*.local
+!.env.example
