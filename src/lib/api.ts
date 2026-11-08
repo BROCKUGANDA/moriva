@@ -70,8 +70,9 @@ export function withApi(opts: { rate?: RateClass; csrf?: boolean } = {}) {
           }
         }
 
-        // 3. params
-        const params = (await routeCtx?.params?.()) ?? {};
+        // 3. params (Next 16: params is a Promise)
+        const rawParams = await routeCtx?.params;
+        const params = (rawParams && typeof rawParams === "object" ? await Promise.resolve(rawParams) : {}) as Record<string, string>;
 
         // 4. handler
         const res = await handler({ req, requestId, ip, params });
