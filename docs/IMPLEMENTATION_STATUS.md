@@ -2,29 +2,27 @@
 
 **Legend:** `DONE` implemented + persisted + access-controlled + error-handled + tests pass · `PARTIAL` works with explicit missing part · `SIMULATED` synthetic demonstration, labelled · `BLOCKED` needs named human/partner/legal/clinical decision · `NOT STARTED`
 
-**Last updated:** Phase 0 complete — implementation phases executing sequentially on branch `feature/moriva-build`.
+**Last updated:** all implementation phases executed on branch `feature/moriva-build`. Test evidence in `docs/TEST_REPORT.md`.
 
 | Phase | Capability | Status | Evidence |
 |---|---|---|---|
-| 0 | Repository reconnaissance | **DONE** | `docs/REPOSITORY_RECONNAISSANCE.md`; baseline lint exit 0; tsc clean in product scope; `GET /` 200 |
-| 0 | Governance docs (architecture, threat model, clinical boundaries, decisions) | **DONE** | `docs/ARCHITECTURE.md`, `docs/THREAT_MODEL.md`, `docs/CLINICAL_SAFETY_BOUNDARIES.md`, `docs/DECISIONS.md`, `docs/adr/0001–0005` |
-| 1 | Scope lock (P0 list) | **DONE** | Phase 0 §3 demo scenario locked; P0 task list in implementation prompt §1.1 adopted |
-| 1 | Full domain schema + env validation + error catalogue + logging | **PARTIAL → executing** | See phase updates below |
-| 2 | Brand system + public site + app shells | **NOT STARTED** | — |
-| 3 | Auth/session/roles/CSRF/consent/audit | **NOT STARTED** | — |
-| 4 | Assessment engine + labelled synthetic instrument + scoring tests | **NOT STARTED** | — |
-| 5 | Navigation rules + provider directory | **NOT STARTED** | — |
-| 6 | Referral state machine + professional simulated workspace | **NOT STARTED** | — |
-| 7 | Help Now + urgent-risk flow | **NOT STARTED** | — |
-| 8 | AI reflection assistant | **BLOCKED (by design, ADR-0005)** | Disabled fail-closed; requires approvals that do not exist |
-| 9 | Privacy centre + privacy tests | **NOT STARTED** | — |
-| 10 | Outcomes analytics | **NOT STARTED** | — |
-| 11 | Error contract + resilience states | **NOT STARTED** | — |
-| 12 | i18n/RTL + accessibility | **NOT STARTED** | — |
-| 13 | Test suite + quality gates | **NOT STARTED** | — |
-| 14 | Deployment preparation | **NOT STARTED** | — |
-| 15 | Documentation package | **PARTIAL** | Phase 0 docs complete; full package due Phase 15 |
-| 16 | Final acceptance walkthrough | **NOT STARTED** | — |
+| 0 | Repository reconnaissance + governance docs | **DONE** | `docs/REPOSITORY_RECONNAISSANCE.md`, ARCHITECTURE, THREAT_MODEL, CLINICAL_SAFETY_BOUNDARIES, DECISIONS, ADR-0001..0005; baseline lint 0 / tsc clean (product scope) |
+| 1 | Scope lock, domain schema (28 models), env fail-closed validation, error catalogue, redacting logger, security helpers | **DONE** | `prisma/schema.prisma`; `src/lib/{env,errors,logging,security,api}.ts`; seed idempotency verified ×2 |
+| 2 | Brand tokens/fonts/assets, Moriva components + glyphs, public site (11 routes), Help Now | **DONE** | `src/app/globals.css`, `src/components/moriva/*`, `src/app/(public)/*`; all routes 200; safety copy verified in integration tests |
+| 3 | Auth (sessions/roles/CSRF), consent service, audit, demo seed | **DONE** | `src/domains/{identity,consent,audit}/service.ts`; consent-bypass + CSRF + logout-revocation integration tests pass |
+| 4 | Assessment engine (versioned registry, labelled synthetic instrument, deterministic scoring, save/resume, urgent-risk interrupt) | **DONE** | 18 scoring vectors + integration tests (idempotent upsert, incomplete→422, repeat-submit, urgent redirect) |
+| 5 | Deterministic navigation engine + provider directory verification states | **DONE** | rationale + rule version in responses; expired/suspended exclusion tested |
+| 6 | Referral state machine (idempotency, optimistic version, evidence sources) + simulated professional workspace | **DONE** | state-machine unit tests + integration tests (replay duplicate, key conflict, stale 409, coordinator denial, SIMULATED evidence) |
+| 7 | Help Now + urgent-risk flow (offline-safe, region-configured, no fake responder) | **DONE** | bundled fallback + DB config; "no alerted responder" copy asserted in tests |
+| 8 | AI reflection assistant | **BLOCKED (by design, ADR-0005)** — fail-closed implemented and tested | `AI_DISABLED` on every request; attempt audited; env flag clamped |
+| 9 | Privacy centre (ledger, revoke, export/deletion requests, access history) + privacy tests | **DONE** | `/app/privacy`; BOLA/cross-user tests pass; ops cannot reach journal surface |
+| 10 | Outcomes analytics (source labels, missingness, small-cell suppression) | **DONE** | `src/domains/analytics/service.ts`; `/ops/outcomes`; suppression unit-tested |
+| 11 | Error contract + boundaries + empty/degraded states | **DONE** | typed ApiProblem everywhere; error.tsx/global-error.tsx/not-found.tsx |
+| 12 | i18n/RTL + accessibility foundations | **DONE (shell-level)** | `dir="rtl"` verified server-rendered; full Arabic translation BLOCKED pending professional review |
+| 13 | Test suite + quality gates | **DONE** | 50/50 unit + 29/29 integration + lint 0 + tsc clean; Playwright gap documented |
+| 14 | Deployment preparation | **DONE (docs + env)** | `.env.example`, `docs/DEPLOYMENT.md`; production BLOCKED behind pilot gates |
+| 15 | Documentation package | **DONE** | README, PRD, ARCHITECTURE, API, ERROR_CATALOG, DATA_DICTIONARY, TEST_REPORT, DEMO_SCRIPT, KNOWN_LIMITATIONS, DEPLOYMENT, THREAT_MODEL, CLINICAL_SAFETY_BOUNDARIES, DECISIONS, ADRs |
+| 16 | Final acceptance walkthrough | **DONE** | agent-browser journey evidence below |
 
 ## Blocked register (named decisions absent — never invented)
 
