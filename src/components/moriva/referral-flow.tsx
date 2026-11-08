@@ -77,11 +77,11 @@ export function ReferralFlow({
     setError(null);
     setBusy(true);
     try {
-      // 1. capture consent for this named recipient
+      // 1. capture consent for this named recipient (PRD §11.2 — recipient-specific consent)
       const consentRes = await fetch("/api/v1/me/consents", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
-        body: JSON.stringify({ purpose: "REFERRAL", dataCategories: preview.dataCategories }),
+        body: JSON.stringify({ purpose: "REFERRAL", dataCategories: preview.dataCategories, recipientType: "PROVIDER", recipientId: preview.recipient.providerId }),
       });
       const consentBody = await consentRes.json().catch(() => null);
       if (!consentRes.ok) {

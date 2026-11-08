@@ -54,6 +54,7 @@ export const POST = withApi({ rate: "write", csrf: true })(async ({ req }) => {
     {
       preview: {
         recipient: {
+          providerId: service.providerId,
           providerDisplayName: service.provider.displayName,
           providerLegalName: service.provider.legalName,
           verificationStatus: service.provider.verificationStatus,

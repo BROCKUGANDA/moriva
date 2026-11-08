@@ -14,6 +14,9 @@ const GrantBody = z.object({
   purpose: z.enum(ALLOWED as [PurposeCode, ...PurposeCode[]]),
   dataCategories: z.array(z.string()).optional(),
   expiresAt: z.string().datetime().nullable().optional(),
+  // REFERRAL / HEALTH_CONTEXT_SHARE consents must name the recipient (PRD §11.2)
+  recipientType: z.enum(["PLATFORM", "PROVIDER", "RESEARCH", "NONE"]).optional(),
+  recipientId: z.string().nullable().optional(),
 });
 
 export const GET = withApi({ rate: "read" })(async () => {
@@ -25,11 +28,16 @@ export const POST = withApi({ rate: "write", csrf: true })(async ({ req }) => {
   const user = await requireUser();
   const parsed = GrantBody.safeParse(await req.json().catch(() => null));
   if (!parsed.success) throw new MorivaError("VALIDATION_FAILED");
+  const recipientType = parsed.data.recipientType ?? "PLATFORM";
+  if (recipientType === "PROVIDER" && !parsed.data.recipientId) {
+    throw new MorivaError("VALIDATION_FAILED", { details: { field: "recipientId" }, messageOverride: "Sharing with a provider must name the provider." });
+  }
   const event = await grantConsent({
     subjectId: user.id,
     actorId: user.id,
     purpose: parsed.data.purpose,
-    recipientType: "PLATFORM",
+    recipientType,
+    recipientId: parsed.data.recipientId ?? null,
     dataCategories: parsed.data.dataCategories,
     expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
   });

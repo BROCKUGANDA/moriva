@@ -1,5 +1,6 @@
 import { SectionHeading } from "@/components/moriva/status";
 import { SupportOptionsAfterResult } from "@/components/moriva/support-options";
+import { AssistantDisabledPanel } from "@/components/moriva/assistant-disabled-panel";
 
 export const metadata = { title: "Support options" };
 export const dynamic = "force-dynamic";
@@ -13,6 +14,9 @@ export default function SupportPage() {
         level={1}
       />
       <SupportOptionsAfterResult />
+      <div className="mt-6">
+        <AssistantDisabledPanel />
+      </div>
     </div>
   );
 }

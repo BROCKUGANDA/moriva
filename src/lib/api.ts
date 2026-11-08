@@ -29,6 +29,10 @@ function clientIp(req: NextRequest): string | null {
   return req.headers.get("x-real-ip");
 }
 
+function isLoopback(ip: string | null): boolean {
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1" || ip === null;
+}
+
 /**
  * Rate-limit classes (per IP; auth routes additionally per-key).
  */
@@ -51,13 +55,19 @@ export function withApi(opts: { rate?: RateClass; csrf?: boolean } = {}) {
       const started = Date.now();
       try {
         pruneBuckets();
-        // 1. rate limit
-        const limit = rateLimit(`api:${rateClass}:${ip ?? "unknown"}`, RATE_CLASSES[rateClass]);
-        if (!limit.allowed) {
-          return NextResponse.json(
-            { code: "RATE_LIMITED", message: "Too many requests. Please try again in a moment.", requestId, retryable: true },
-            { status: 429, headers: { "x-request-id": requestId, "Retry-After": String(limit.retryAfterSeconds) } }
-          );
+        // 1. rate limit — loopback traffic is exempt in non-production demo mode so that
+        //    local integration tests and the sandbox gateway (which proxies from localhost)
+        //    are not throttled. Production limits every client regardless of source.
+        const env = getEnv();
+        const skipLimit = env.nodeEnv !== "production" && env.demoMode && isLoopback(ip);
+        if (!skipLimit) {
+          const limit = rateLimit(`api:${rateClass}:${ip ?? "unknown"}`, RATE_CLASSES[rateClass]);
+          if (!limit.allowed) {
+            return NextResponse.json(
+              { code: "RATE_LIMITED", message: "Too many requests. Please try again in a moment.", requestId, retryable: true },
+              { status: 429, headers: { "x-request-id": requestId, "Retry-After": String(limit.retryAfterSeconds) } }
+            );
+          }
         }
 
         // 2. CSRF double-submit for cookie-authenticated mutations
