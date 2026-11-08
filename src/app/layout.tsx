@@ -1,52 +1,60 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Manrope, Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { LocaleProvider } from "@/components/moriva/locale-provider";
+import { cookies } from "next/headers";
+import { isRtl } from "@/i18n/dictionaries";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+  title: {
+    default: "MORIVA — Notice earlier. Find the right support.",
+    template: "%s · MORIVA",
   },
-  openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-  },
+  description:
+    "MORIVA is a privacy-first wellbeing recognition and care-navigation prototype: voluntary check-ins, explainable non-diagnostic results, consented referrals and honest follow-up.",
+  icons: { icon: "/brand/favicon.svg" },
+  // Prototype boundary: no medical, regulatory or effectiveness claims in metadata.
 };
 
-export default function RootLayout({
+export const viewport: Viewport = {
+  themeColor: "#122C38",
+  width: "device-width",
+  initialScale: 1,
+};
+
+export default async function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
+  const jar = await cookies();
+  const locale = jar.get("moriva_locale")?.value ?? "en";
+  const dir = isRtl(locale) ? "rtl" : "ltr";
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
-      >
-        {children}
-        <Toaster />
+    <html lang={locale} dir={dir} className={`${manrope.variable} ${inter.variable}`}>
+      <body className="min-h-screen flex flex-col antialiased">
+        <LocaleProvider initialLocale={locale}>
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:absolute focus:z-100 focus:top-2 focus:left-2 focus:bg-white focus:text-moriva-ink focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-card"
+          >
+            Skip to main content
+          </a>
+          {children}
+          <Toaster />
+        </LocaleProvider>
       </body>
     </html>
   );
