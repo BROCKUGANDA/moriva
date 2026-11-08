@@ -159,7 +159,7 @@ export function AssessmentRunner({ sessionId }: { sessionId: string }) {
         </div>
         <Progress value={progress} className="mt-3 h-1.5" aria-label={`Progress: ${answeredCount} of ${data.items.length} answered`} />
         <p className="mt-2 text-xs text-moriva-slate" aria-live="polite">
-          {answeredCount} of {data.items.length} answered · {saveState === "saving" ? "Saving your progress…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Not saved — check your connection before leaving." : ""}
+          {answeredCount} of {data.items.length} answered{saveState === "saving" ? " · Saving your progress…" : saveState === "saved" ? " · Saved" : saveState === "error" ? " · Not saved — check your connection before leaving." : ""}
         </p>
 
         {item && (

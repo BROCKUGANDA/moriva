@@ -15,9 +15,14 @@ export default async function ResultPage({ params }: { params: Promise<{ session
   if (!user) redirect("/login");
   const session = await getOwnedSession(user.id, sessionId);
   if (!session.result) redirect(`/app/assessments/${sessionId}`);
-  const bands = JSON.parse(session.instrumentVersion.interpretationEn || "[]") as Array<{ code: string; titleEn: string; bodyEn: string }>;
+  const bands = JSON.parse(session.instrumentVersion.interpretationEn || "[]") as Array<{ code: string; titleEn: string; bodyEn: string; min?: number; max?: number }>;
   const band = bands.find((b) => b.code === session.result!.interpretationCode) ?? null;
   const blocks = await db.contentItem.findMany({ where: { contentType: "RESULT_BLOCK", status: "REVIEWED", locale: "en" } });
+  const timeframeLabel = session.instrumentVersion.timeframe.replace(/_/g, " ").toLowerCase();
+  // internal document references (e.g. CLINICAL_SAFETY_BOUNDARIES.md §1) become readable labels
+  const sourceLabel = (ref: string) => ref.replace(/\.md\b/g, "").replace(/_/g, " ").trim();
+  const rawMax = bands.length ? Math.max(...bands.map((b) => b.max ?? 0)) : 0;
+  const maxScore = rawMax > 0 ? rawMax : null;
 
   return (
     <div className="mx-auto moriva-assessment-width">
@@ -42,19 +47,21 @@ export default async function ResultPage({ params }: { params: Promise<{ session
         <dl className="mt-6 grid gap-3 rounded-xl bg-muted p-4 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-xs font-semibold uppercase text-moriva-slate">Screening result</dt>
-            <dd className="font-semibold text-moriva-ink">
-              {session.result.interpretationCode} ({session.result.rawScore} / 15 points in this demonstration)
+            <dd className="font-semibold text-moriva-ink" title={`Result code: ${session.result.interpretationCode}`}>
+              {band ? band.titleEn : session.result.interpretationCode} — {session.result.rawScore}{maxScore ? ` of ${maxScore}` : ""} points
             </dd>
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase text-moriva-slate">Completed</dt>
             <dd className="font-semibold text-moriva-ink">
-              {session.completedAt ? new Date(session.completedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—"} ({session.instrumentVersion.timeframe.replace("_", " ").toLowerCase()})
+              {session.completedAt ? new Date(session.completedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—"} · covers the {timeframeLabel}
             </dd>
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase text-moriva-slate">Scoring implementation</dt>
-            <dd className="font-semibold text-moriva-ink">{session.result.ruleVersion} · deterministic, no AI</dd>
+            <dd className="font-semibold text-moriva-ink">
+              Fixed rules, applied the same way every time — no AI <span className="font-normal text-moriva-slate">(scoring version {session.result.ruleVersion})</span>
+            </dd>
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase text-moriva-slate">Clinical approver</dt>
@@ -74,7 +81,7 @@ export default async function ResultPage({ params }: { params: Promise<{ session
               <div key={b.id} className="rounded-xl border border-moriva-line bg-muted/50 p-4">
                 <p className="text-sm font-semibold text-moriva-ink">{b.title}</p>
                 <p className="mt-1 text-sm leading-relaxed text-moriva-slate">{b.body}</p>
-                <p className="mt-1 text-[11px] text-moriva-slate">Source: {b.sourceRef}</p>
+                <p className="mt-1 text-[11px] text-moriva-slate" title={`Internal source reference: ${b.sourceRef ?? ""}`}>Review basis: {sourceLabel(b.sourceRef ?? "")}</p>
               </div>
             ))}
           </section>

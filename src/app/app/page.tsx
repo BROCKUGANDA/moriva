@@ -24,6 +24,8 @@ export default async function AppOverviewPage() {
     }),
     db.consentEvent.count({ where: { subjectUserId: user.id, status: "GRANTED" } }),
   ]);
+  const lastBands = lastSession ? (JSON.parse(lastSession.instrumentVersion.interpretationEn || "[]") as Array<{ code: string; titleEn: string }>) : [];
+  const lastBandTitle = lastBands.find((b) => b.code === lastSession?.result?.interpretationCode)?.titleEn ?? lastSession?.result?.interpretationCode;
 
   return (
     <div>
@@ -47,7 +49,7 @@ export default async function AppOverviewPage() {
                 {lastSession.instrumentVersion.instrument.displayName}
               </p>
               <p className="mt-1 text-sm text-moriva-slate">
-                {lastSession.result.interpretationCode} · completed{" "}
+                {lastBandTitle} · completed{" "}
                 {lastSession.completedAt ? new Date(lastSession.completedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}
               </p>
               <Link href={`/app/assessments/${lastSession.id}/result`} className="mt-3 inline-block text-sm font-semibold text-moriva-teal underline-offset-4 hover:underline">

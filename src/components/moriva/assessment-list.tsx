@@ -11,6 +11,18 @@ type SessionRow = {
   status: string; startedAt: string; completedAt: string | null; interpretationCode: string | null;
 };
 
+const LICENCE_COPY: Record<string, string> = {
+  SYNTHETIC_NO_RIGHTS_REQUIRED: "Synthetic content — no third-party rights required",
+};
+const STATUS_COPY: Record<string, { label: string; tone: "success" | "neutral" | "teal" }> = {
+  SCORED: { label: "Completed", tone: "success" },
+  IN_PROGRESS: { label: "In progress", tone: "teal" },
+  ABANDONED: { label: "Paused", tone: "neutral" },
+};
+
+/**
+ * Assessment picker + list of the signed-in person's sessions.
+ */
 export function AssessmentList() {
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [instruments, setInstruments] = useState<Array<{
@@ -65,14 +77,16 @@ export function AssessmentList() {
                 <div>
                   <h3 className="font-display text-lg font-bold text-moriva-ink">{inst.displayName}</h3>
                   <p className="mt-1 text-sm text-moriva-slate">
-                    Purpose: self-reflection about your wellbeing · Covers: {inst.version.timeframe.replace("_", " ").toLowerCase()} ·
+                    Purpose: self-reflection about your wellbeing · Covers: {inst.version.timeframe.replace(/_/g, " ").toLowerCase()} ·
                     About {inst.version.estimatedMinutes} minutes · {inst.version.itemCount} questions · You can pause any time.
                   </p>
                 </div>
                 {inst.simulationOnly && <StatusBadge tone="coral">SYNTHETIC DEMONSTRATION</StatusBadge>}
               </div>
               <p className="mt-2 text-xs text-moriva-slate">{inst.version.validityNotes}</p>
-              <p className="mt-1 text-xs text-moriva-slate">Source: {inst.ownerSource} · Version {inst.version.version} · Licence: {inst.version.licenceStatus}</p>
+              <p className="mt-1 text-xs text-moriva-slate" title={`Internal record — source: ${inst.ownerSource} · id: ${inst.id}`}>
+                Source: MORIVA prototype (authored demonstration content) · Version {inst.version.version} · Licence: {LICENCE_COPY[inst.version.licenceStatus] ?? inst.version.licenceStatus.toLowerCase().replace(/_/g, " ")}
+              </p>
               <Button onClick={start} disabled={starting} className="mt-4 min-h-12 bg-moriva-teal px-6 font-bold hover:bg-moriva-teal-soft" data-testid="start-assessment">
                 {starting ? "Preparing…" : "Start"}
               </Button>
@@ -100,7 +114,7 @@ export function AssessmentList() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <StatusBadge tone={s.status === "SCORED" ? "success" : s.status === "ABANDONED" ? "neutral" : "teal"}>{s.status}</StatusBadge>
+                  <StatusBadge tone={STATUS_COPY[s.status]?.tone ?? "teal"}>{STATUS_COPY[s.status]?.label ?? s.status.toLowerCase().replace(/_/g, " ")}</StatusBadge>
                   {s.status === "SCORED" ? (
                     <Link href={`/app/assessments/${s.id}/result`} className="min-h-11 rounded-lg bg-moriva-teal px-3 py-2 text-sm font-semibold text-white hover:bg-moriva-teal-soft">
                       View result

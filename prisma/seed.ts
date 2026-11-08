@@ -78,7 +78,7 @@ async function seedInstrument() {
         contentChecksum: checksum,
         scoringVersion: "demo-scoring-1.0.0",
         licenceStatus: "SYNTHETIC_NO_RIGHTS_REQUIRED",
-        validityNotes: "Synthetic demonstration content. Not validated, not clinically approved, not a diagnostic tool. Shipped under PRD §8.4 because no clinical approver is available.",
+        validityNotes: "Synthetic demonstration content: not validated, not clinically approved, and not a diagnostic tool.",
         limitationsEn: "This check is a synthetic demonstration. It cannot tell you whether you have a condition, and it cannot predict what will happen. It does not measure all aspects of wellbeing, and it is not a validated clinical questionnaire. Only a qualified professional can help you understand what you are experiencing.",
         interpretationEn: JSON.stringify([
           { min: 0, max: 5, code: "DEMO_LOWER", titleEn: "Lower wellbeing in this period", bodyEn: "Your responses suggest your wellbeing may have been lower over the last two weeks. This is not a diagnosis, and it cannot say why. Many people find it useful to look at support options or talk to someone — a professional can help you understand this." },
@@ -86,7 +86,7 @@ async function seedInstrument() {
           { min: 11, max: 15, code: "DEMO_STEADIER", titleEn: "Steadier wellbeing in this period", bodyEn: "Your responses suggest things have felt steadier over the last two weeks. This is not a diagnosis and doesn't measure everything. Support options remain available whenever you want them." },
         ]),
         riskItemKey: "safety_urgent_thoughts",
-        clinicalApprover: "NONE — synthetic demonstration (no clinical approver exists)",
+        clinicalApprover: "None — synthetic demonstration (no clinical approver exists)",
         approvedAt: new Date("2026-11-08T00:00:00Z"),
         status: "APPROVED_SIMULATION",
       },
@@ -104,6 +104,12 @@ async function seedInstrument() {
         },
       });
     }
+  } else {
+    // idempotent: refresh stored copy if the human-readable text changed
+    const fresh = { validityNotes: "Synthetic demonstration content: not validated, not clinically approved, and not a diagnostic tool.", clinicalApprover: "None — synthetic demonstration (no clinical approver exists)" };
+    if (ver.validityNotes !== fresh.validityNotes || ver.clinicalApprover !== fresh.clinicalApprover) {
+      await db.instrumentVersion.update({ where: { id: ver.id }, data: fresh });
+    }
   }
   // link active version
   await db.instrument.update({ where: { id: instrument.id }, data: { activeVersionId: ver.id } });
@@ -112,10 +118,8 @@ async function seedInstrument() {
 
 async function seedPathway() {
   const version = "2026.11-demo";
-  const existing = await db.pathwayRule.findFirst({ where: { version, jurisdiction: "AE-AZ" } });
-  if (existing) return;
   const rules = {
-    note: "DEMONSTRATION RULES — no clinical approval exists. Synthetic thresholds exercise the deterministic engine only.",
+    note: "Demonstration rule set — no clinical approver has reviewed these thresholds. They exist only to exercise the rule engine in this prototype.",
     bundles: [
       {
         id: "urgent-safety",
@@ -157,12 +161,23 @@ async function seedPathway() {
       },
     ],
   };
+  const existing = await db.pathwayRule.findFirst({ where: { version, jurisdiction: "AE-AZ" } });
+  const contentHash = createHash("sha256").update(JSON.stringify(rules)).digest("hex");
+  if (existing) {
+    // idempotent: refresh stored copy if the human-readable text changed
+    const stored = JSON.parse(existing.rulesJson);
+    if (stored.note !== rules.note) {
+      stored.note = rules.note;
+      await db.pathwayRule.update({ where: { id: existing.id }, data: { rulesJson: JSON.stringify(stored), contentHash } });
+    }
+    return;
+  }
   await db.pathwayRule.create({
     data: {
       version,
       jurisdiction: "AE-AZ",
       status: "DEMO_APPROVED",
-      contentHash: createHash("sha256").update(JSON.stringify(rules)).digest("hex"),
+      contentHash,
       rulesJson: JSON.stringify(rules),
       clinicalApproverId: "NONE_DEMO",
       approvedAt: new Date("2026-11-08T00:00:00Z"),

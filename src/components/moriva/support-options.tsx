@@ -83,8 +83,8 @@ export function SupportOptionsAfterResult({ resultId }: { resultId?: string }) {
   return (
     <div className="mt-3" data-testid="support-options">
       <div className="flex flex-wrap items-center gap-2 text-xs text-moriva-slate">
-        <StatusBadge tone="teal">Rules v{nav.ruleVersion}</StatusBadge>
-        <span>Why these options? Deterministic, versioned pathway rules — no AI involved.</span>
+        <StatusBadge tone="teal">Rule set v{nav.ruleVersion}</StatusBadge>
+        <span>Why these options? A fixed, versioned rule set chooses them the same way every time — no AI involved.</span>
       </div>
       {nav.note && <p className="mt-1 text-xs text-state-warning">{nav.note}</p>}
 
@@ -102,9 +102,8 @@ export function SupportOptionsAfterResult({ resultId }: { resultId?: string }) {
                 )}
               </div>
               <p className="mt-1 text-sm text-moriva-slate">{copy.blurb}</p>
-              <p className="mt-2 rounded-lg bg-muted px-3 py-2 text-xs text-moriva-ink/80">
-                <strong>Why this appears:</strong> {opt.rationaleText}{" "}
-                <span className="text-moriva-slate">({opt.rationaleCode})</span>
+              <p className="mt-2 rounded-lg bg-muted px-3 py-2 text-xs text-moriva-ink/80" title={`Rule reference: ${opt.rationaleCode}`}>
+                <strong>Why this appears:</strong> {opt.rationaleText}
               </p>
               <div className="mt-3">
                 <ProvidersForOption ids={opt.providerServiceIds} />

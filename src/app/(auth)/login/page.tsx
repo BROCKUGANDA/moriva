@@ -80,15 +80,24 @@ export default function LoginPage() {
           <p className="text-xs font-bold uppercase tracking-widest text-moriva-teal">Demo environment — synthetic accounts</p>
           <p className="mt-1 text-xs text-moriva-slate">Shared demo password: <code className="rounded bg-muted px-1.5 py-0.5">Moriva-Demo-2026!</code></p>
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            <Button variant="outline" onClick={(e) => submit(e, "INDIVIDUAL")} disabled={busy} className="min-h-11 text-xs">
-              Individual
-            </Button>
-            <Button variant="outline" onClick={(e) => submit(e, "PROFESSIONAL")} disabled={busy} className="min-h-11 text-xs">
-              Professional (simulated)
-            </Button>
-            <Button variant="outline" onClick={(e) => submit(e, "OPS")} disabled={busy} className="min-h-11 text-xs">
-              Operations
-            </Button>
+            {([
+              ["INDIVIDUAL", "Individual", "demo.individual@moriva.demo"],
+              ["PROFESSIONAL", "Professional", "demo.clinician@moriva.demo"],
+              ["OPS", "Operations", "demo.ops@moriva.demo"],
+            ] as const).map(([hint, label, email]) => (
+              <Button
+                key={hint}
+                variant="outline"
+                onClick={(e) => submit(e, hint)}
+                disabled={busy}
+                className="h-auto min-h-16 whitespace-normal px-2 py-2.5 text-xs leading-tight"
+              >
+                <span className="block">
+                  <span className="block font-bold">{label}</span>
+                  <span className="mt-0.5 block text-[10px] font-normal text-moriva-slate">{email}</span>
+                </span>
+              </Button>
+            ))}
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-moriva-slate">
             Demo mode is enabled. If production is ever detected, demo identities are refused at startup — this is enforced in code.
