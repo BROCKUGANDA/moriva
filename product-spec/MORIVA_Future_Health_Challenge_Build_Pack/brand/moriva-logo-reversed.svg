@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 150" role="img" aria-labelledby="title desc">
+<title id="title">MORIVA logo</title><desc id="desc">MORIVA wordmark with its connected-care symbol.</desc>
+<defs><linearGradient id="flow" x1="20" y1="25" x2="105" y2="100" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFFFFF"/></linearGradient></defs>
+<g transform="translate(12 11)">
+<path d="M29 87C15 72 14 49 25 31C33 18 46 11 59 10" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+<path d="M69 10C83 11 96 19 104 32C115 50 112 73 98 88" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+<path d="M25 67C39 70 47 61 57 49C67 37 79 34 99 43" fill="none" stroke="url(#flow)" stroke-width="9" stroke-linecap="round"/>
+<path d="M29 91C48 108 79 109 99 90" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/>
+<circle cx="64" cy="25" r="8" fill="#FFFFFF"/>
+</g>
+<text x="158" y="91" font-family="Inter, Manrope, Arial, sans-serif" font-size="66" font-weight="750" letter-spacing="4" fill="#FFFFFF">MORIVA</text>
+<text x="163" y="119" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="650" letter-spacing="3.2" fill="#FFFFFF">NOTICE EARLIER. FIND SUPPORT.</text>
+</svg>

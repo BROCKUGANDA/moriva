@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+<title id="title">MORIVA symbol</title><desc id="desc">A flowing, open circular path around a central signal point, representing early recognition and a connected route to support.</desc>
+<defs><linearGradient id="flow" x1="20" y1="25" x2="105" y2="100" gradientUnits="userSpaceOnUse"><stop stop-color="#197F7B"/><stop offset="1" stop-color="#A8D5CD"/></linearGradient></defs>
+<path d="M29 87C15 72 14 49 25 31C33 18 46 11 59 10" fill="none" stroke="#122C38" stroke-width="8" stroke-linecap="round"/>
+<path d="M69 10C83 11 96 19 104 32C115 50 112 73 98 88" fill="none" stroke="#197F7B" stroke-width="8" stroke-linecap="round"/>
+<path d="M25 67C39 70 47 61 57 49C67 37 79 34 99 43" fill="none" stroke="url(#flow)" stroke-width="9" stroke-linecap="round"/>
+<path d="M29 91C48 108 79 109 99 90" fill="none" stroke="#A8D5CD" stroke-width="9" stroke-linecap="round"/>
+<circle cx="64" cy="25" r="8" fill="#F29B83"/>
+</svg>

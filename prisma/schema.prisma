@@ -1,0 +1,556 @@
+// MORIVA — domain schema (Prisma / SQLite for prototype; PostgreSQL-portable discipline, ADR-0002)
+// All timestamps UTC. No sensitive free-text in JSON columns beyond declared fields.
+// Enum values are constrained text + zod-validated at the edge (SQLite has no native enum).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── identity ─────────────────────────────
+
+model User {
+  id                      String               @id @default(cuid())
+  email                   String               @unique
+  passwordHash            String
+  displayName             String
+  // role is server-assigned only; never accepted from client. INDIVIDUAL | PROFESSIONAL_SIMULATED | PROVIDER_COORDINATOR_SIMULATED | OPS_ADMIN_SIMULATED | CLINICAL_GOVERNANCE_SIMULATED
+  role                    String               @default("INDIVIDUAL")
+  status                  String               @default("ACTIVE") // ACTIVE | SUSPENDED | DEACTIVATED
+  demoData                Boolean              @default(false) // true ⇒ synthetic demo identity
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  profile                 UserProfile?
+  sessions                Session[]
+  consentEvents           ConsentEvent[]
+  assessmentSessions      AssessmentSession[]
+  referrals               Referral[]           @relation("ReferralSubject")
+  journalEntries          JournalEntry[]
+  healthContextItems      HealthContextItem[]
+  healthContextShares     HealthContextShare[]
+  notifications           Notification[]
+  dataRequests            DataRequest[]
+  safetyEvents            SafetyEvent[]        @relation("SafetySubject")
+  organisationsOwned      Provider[]           @relation("ProviderCoordinator")
+  professionalAssignments ReferralAssignment[]
+}
+
+model UserProfile {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locale          String   @default("en") // en | ar
+  timezone        String   @default("Asia/Dubai")
+  ageBand         String? // self-declared band, optional
+  regionCode      String   @default("AE-AZ")
+  preferencesJson String   @default("{}") // non-sensitive UI prefs (reduced motion, font size)
+  updatedAt       DateTime @updatedAt
+}
+
+model Organisation {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  name      String
+  orgType   String     @default("PROVIDER") // PROVIDER | SUPPORT | INTERNAL
+  createdAt DateTime   @default(now())
+  providers Provider[]
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique // sha256 of opaque token; raw token never stored
+  csrfToken  String
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastSeenAt DateTime  @default(now())
+  ipHash     String?
+  userAgent  String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ───────────────────────────── consent ─────────────────────────────
+
+model ConsentPurpose {
+  id               String    @id @default(cuid())
+  code             String    @unique // e.g. ACCOUNT_SECURITY, ASSESSMENT_STORAGE, JOURNAL_STORAGE, AI_PROCESSING, REFERRAL, HEALTH_CONTEXT_SHARE, FOLLOWUP_NOTIFICATIONS, RESEARCH, MARKETING
+  version          Int // immutable wording version
+  titleEn          String
+  titleAr          String?
+  wordingEn        String
+  wordingAr        String?
+  dataCategoriesEn String
+  required         Boolean   @default(false)
+  effectiveAt      DateTime  @default(now())
+  retiredAt        DateTime?
+}
+
+model ConsentEvent {
+  id                String     @id @default(cuid())
+  subjectUserId     String
+  subject           User       @relation(fields: [subjectUserId], references: [id], onDelete: Cascade)
+  purposeCode       String
+  purposeVersion    Int
+  recipientType     String     @default("PLATFORM") // PLATFORM | PROVIDER | RESEARCH | NONE
+  recipientId       String?
+  dataCategories    String     @default("") // pipe-separated category codes
+  status            String // GRANTED | REVOKED | EXPIRED
+  grantedAt         DateTime   @default(now())
+  revokedAt         DateTime?
+  expiresAt         DateTime?
+  proofHash         String // sha256 of canonical consent capture payload
+  actorId           String?
+  notificationState String     @default("NONE")
+  referrals         Referral[]
+
+  @@index([subjectUserId, purposeCode, status])
+  @@index([subjectUserId, recipientId])
+}
+
+// ─────────────────────────── assessment ───────────────────────────
+
+model Instrument {
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  displayName        String
+  ownerSource        String
+  construct          String
+  intendedPopulation String
+  activeVersionId    String?             @unique
+  status             String              @default("SIMULATION_ONLY") // ACTIVE | SIMULATION_ONLY | RETIRED
+  createdAt          DateTime            @default(now())
+  versions           InstrumentVersion[]
+}
+
+model InstrumentVersion {
+  id               String              @id @default(cuid())
+  instrumentId     String
+  instrument       Instrument          @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  version          String
+  locale           String              @default("en")
+  timeframe        String // e.g. "LAST_TWO_WEEKS" — display metadata only
+  contentChecksum  String
+  scoringVersion   String
+  licenceStatus    String // e.g. SYNTHETIC_NO_RIGHTS_REQUIRED | PENDING_RIGHTS_CONFIRMATION
+  validityNotes    String
+  limitationsEn    String
+  interpretationEn String // JSON-encoded band table (demonstration content)
+  riskItemKey      String? // item key that triggers urgent-risk flow when endorsed
+  clinicalApprover String? // named human or NONE_SYNTHETIC
+  approvedAt       DateTime?
+  effectiveAt      DateTime            @default(now())
+  retiredAt        DateTime?
+  status           String              @default("DRAFT") // DRAFT | APPROVED_SIMULATION | APPROVED | RETIRED
+  items            InstrumentItem[]
+  sessions         AssessmentSession[]
+
+  @@unique([instrumentId, version, locale])
+}
+
+model InstrumentItem {
+  id                  String            @id @default(cuid())
+  instrumentVersionId String
+  version             InstrumentVersion @relation(fields: [instrumentVersionId], references: [id], onDelete: Cascade)
+  ordinal             Int
+  itemKey             String
+  promptEn            String
+  helperEn            String?
+  responseSchema      String // JSON: {type:"ordinal", min:0, max:3, labels:[...]} etc
+  required            Boolean           @default(true)
+
+  @@unique([instrumentVersionId, itemKey])
+  @@index([instrumentVersionId, ordinal])
+}
+
+model AssessmentSession {
+  id                  String               @id @default(cuid())
+  userId              String
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instrumentVersionId String
+  instrumentVersion   InstrumentVersion    @relation(fields: [instrumentVersionId], references: [id])
+  status              String               @default("CREATED") // CREATED | IN_PROGRESS | COMPLETED | SCORED | ABANDONED | EXPIRED | CANCELLED | INVALIDATED_BY_INSTRUMENT_RETIREMENT
+  locale              String               @default("en")
+  scoringVersion      String
+  source              String               @default("WEB")
+  startedAt           DateTime             @default(now())
+  completedAt         DateTime?
+  updatedAt           DateTime             @updatedAt
+  responses           AssessmentResponse[]
+  result              AssessmentResult?
+
+  @@index([userId, status])
+}
+
+model AssessmentResponse {
+  id            String            @id @default(cuid())
+  sessionId     String
+  session       AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  itemId        String // itemKey
+  responseValue Int? // selected ordinal value; null = explicitly skipped
+  answeredAt    DateTime          @default(now())
+
+  @@unique([sessionId, itemId]) // idempotent upsert, one answer per item
+  @@index([sessionId])
+}
+
+model AssessmentResult {
+  id                        String            @id @default(cuid())
+  sessionId                 String            @unique
+  session                   AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  rawScore                  Int?
+  transformedScore          Int?
+  interpretationCode        String // DEMO_LOW | DEMO_MODERATE | DEMO_ELEVATED | INCOMPLETE
+  ruleVersion               String // scoring/interpretation bundle version
+  limitationsContentVersion String
+  computedAt                DateTime          @default(now())
+  referrals                 Referral[]
+}
+
+// ───────────────────────────── safety ─────────────────────────────
+
+model SafetyResourceConfig {
+  id             String    @id @default(cuid())
+  regionCode     String
+  version        Int
+  status         String    @default("ACTIVE") // ACTIVE | EXPIRED
+  contactName    String
+  contactPhone   String // digits only, e.g. 999
+  contactPurpose String // e.g. EMERGENCY
+  sourceUrl      String
+  sourceOrg      String
+  lastVerifiedAt DateTime
+  expiresAt      DateTime?
+  isEmergency    Boolean   @default(true)
+  notesEn        String
+
+  @@unique([regionCode, version, contactPurpose])
+}
+
+model SafetyEvent {
+  id            String    @id @default(cuid())
+  subjectUserId String? // nullable: public Help Now usage without account
+  subject       User?     @relation("SafetySubject", fields: [subjectUserId], references: [id], onDelete: SetNull)
+  sourceType    String // HELP_NOW_SELECTION | ASSESSMENT_RISK_ITEM | STAFF_ACTIVATION
+  triggerCode   String
+  configVersion Int
+  eventStatus   String    @default("OPEN") // OPEN | CLOSED
+  regionCode    String
+  createdAt     DateTime  @default(now())
+  closedAt      DateTime?
+
+  @@index([subjectUserId])
+  @@index([createdAt])
+}
+
+// ─────────────────────────── directory ───────────────────────────
+
+model Provider {
+  id                 String            @id @default(cuid())
+  organisationId     String?
+  organisation       Organisation?     @relation(fields: [organisationId], references: [id])
+  coordinatorId      String?
+  coordinator        User?             @relation("ProviderCoordinator", fields: [coordinatorId], references: [id])
+  legalName          String
+  displayName        String
+  jurisdiction       String            @default("AE-AZ")
+  // VERIFIED | PENDING | SUSPENDED | EXPIRED | REJECTED | DEMO_VERIFIED_SIMULATED
+  verificationStatus String            @default("PENDING")
+  verificationScope  String            @default("") // what was actually checked
+  verifiedAt         DateTime?
+  recheckDueAt       DateTime?
+  sourceRef          String            @default("")
+  demoData           Boolean           @default(false)
+  services           ProviderService[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([verificationStatus])
+}
+
+model ProviderService {
+  id                 String            @id @default(cuid())
+  providerId         String
+  provider           Provider          @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  serviceCode        String
+  serviceName        String
+  careLevel          String // SELF_GUIDED | COMMUNITY | PRIMARY_CARE | TELEMH | SPECIALIST | EMERGENCY
+  languages          String            @default("en") // pipe-separated
+  eligibility        String
+  accessibility      String            @default("")
+  location           String
+  availabilitySource String            @default("NOT_PUBLISHED") // never fabricated
+  status             String            @default("ACTIVE") // ACTIVE | SUSPENDED | EXPIRED
+  demoData           Boolean           @default(false)
+  lastVerifiedAt     DateTime?
+  recheckDueAt       DateTime?
+  referrals          Referral[]
+  supportResources   SupportResource[]
+
+  @@index([status, careLevel])
+}
+
+model SupportResource {
+  id                String           @id @default(cuid())
+  resourceType      String // SELF_GUIDED | COMMUNITY | INFORMATION
+  titleEn           String
+  titleAr           String?
+  organisationId    String?
+  providerServiceId String?
+  service           ProviderService? @relation(fields: [providerServiceId], references: [id])
+  locale            String           @default("en")
+  regionCode        String           @default("AE-AZ")
+  eligibility       String           @default("")
+  sourceUrl         String
+  sourceOrg         String
+  verifiedAt        DateTime?
+  recheckDueAt      DateTime?
+  status            String           @default("ACTIVE")
+  demoData          Boolean          @default(false)
+
+  @@index([status, resourceType])
+}
+
+// ─────────────────────────── navigation ───────────────────────────
+
+model PathwayRule {
+  id                 String    @id @default(cuid())
+  version            String
+  jurisdiction       String    @default("AE-AZ")
+  status             String    @default("DRAFT") // DRAFT | DEMO_APPROVED | APPROVED | EXPIRED | RETIRED
+  contentHash        String
+  rulesJson          String // versioned rule bundle (deterministic; no free text user data)
+  clinicalApproverId String? // named human or NONE_DEMO
+  approvedAt         DateTime?
+  effectiveAt        DateTime  @default(now())
+  expiryAt           DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@unique([version, jurisdiction])
+}
+
+// ─────────────────────────── referrals ───────────────────────────
+
+model Referral {
+  id                 String               @id @default(cuid())
+  userId             String
+  user               User                 @relation("ReferralSubject", fields: [userId], references: [id], onDelete: Cascade)
+  providerServiceId  String
+  providerService    ProviderService      @relation(fields: [providerServiceId], references: [id])
+  assessmentResultId String?
+  assessmentResult   AssessmentResult?    @relation(fields: [assessmentResultId], references: [id])
+  state              String               @default("DRAFT")
+  consentEventId     String
+  consentEvent       ConsentEvent         @relation(fields: [consentEventId], references: [id])
+  idempotencyKey     String               @unique
+  requestHash        String // canonical payload hash bound to the key
+  sharedFields       String               @default("") // pipe-separated field list consented
+  version            Int                  @default(1) // optimistic concurrency
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  events             ReferralEvent[]
+  assignments        ReferralAssignment[]
+  contextShares      HealthContextShare[]
+  followUps          FollowUp[]
+
+  @@index([userId, state])
+  @@index([state, updatedAt])
+}
+
+model ReferralEvent {
+  id             String   @id @default(cuid())
+  referralId     String
+  referral       Referral @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  eventType      String // CREATED | STATE_TRANSITION | CONSENT_WITHDRAWN | DELIVERY_SIMULATED | NOTE_ADDED | FOLLOW_UP_*
+  fromState      String?
+  toState        String?
+  actorType      String // INDIVIDUAL | PROFESSIONAL_SIMULATED | SYSTEM | OPS
+  actorId        String?
+  evidenceSource String? // PROVIDER_CONFIRMED | PATIENT_REPORTED | SIMULATED | INTEGRATION_CONFIRMED
+  safeReasonCode String? // neutral decline reasons only
+  noteClass      String? // CLINICAL_NOTE | OPERATIONS_NOTE | PATIENT_MESSAGE
+  noteBody       String? // explicit, user/actor-entered only
+  occurredAt     DateTime @default(now())
+  metadataJson   String   @default("{}") // redacted metadata only
+
+  @@index([referralId, occurredAt])
+}
+
+model ReferralAssignment {
+  id             String    @id @default(cuid())
+  referralId     String
+  referral       Referral  @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  organisationId String?
+  professionalId String?
+  assignedAt     DateTime  @default(now())
+  revokedAt      DateTime?
+  user           User?     @relation(fields: [userId], references: [id])
+  userId         String?
+
+  @@index([professionalId])
+  @@index([referralId])
+}
+
+model FollowUp {
+  id             String    @id @default(cuid())
+  referralId     String
+  referral       Referral  @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  dueAt          DateTime
+  status         String    @default("DUE") // DUE | COMPLETED | MISSED | CANCELLED
+  evidenceSource String // PROVIDER_CONFIRMED | PATIENT_REPORTED | SIMULATED
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([referralId])
+}
+
+// ─────────────────────── health context ───────────────────────
+
+model HealthContextItem {
+  id               String                   @id @default(cuid())
+  userId           String
+  user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemType         String // CONDITION | MEDICATION | CONCERN | FUNCTION | CARE_FOLLOWUP
+  valueText        String // self-reported content
+  sourceType       String                   @default("SELF_REPORTED") // SELF_REPORTED | CLINICIAN_ENTERED | IMPORTED | SYNTHETIC_DEMO
+  sourceRef        String?
+  recordedAt       DateTime                 @default(now())
+  sensitivityClass String                   @default("HEALTH")
+  shares           HealthContextShareItem[]
+
+  @@index([userId])
+}
+
+model HealthContextShare {
+  id             String                   @id @default(cuid())
+  userId         String
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referralId     String
+  referral       Referral                 @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  consentEventId String
+  purposeSummary String
+  sharedAt       DateTime                 @default(now())
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  items          HealthContextShareItem[]
+
+  @@index([referralId])
+}
+
+model HealthContextShareItem {
+  id      String             @id @default(cuid())
+  shareId String
+  share   HealthContextShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  itemId  String
+  item    HealthContextItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([shareId, itemId])
+}
+
+model JournalEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bodyText  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+// ─────────────── notifications / outbox / audit / content ───────────────
+
+model Notification {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose             String // REFERRAL_UPDATE | FOLLOW_UP | ACCOUNT
+  templateVersion     String
+  channel             String    @default("IN_APP")
+  status              String    @default("QUEUED") // QUEUED | SENT | FAILED | DEAD_LETTER
+  nonSensitivePayload String    @default("{}") // never contains clinical text
+  scheduledAt         DateTime  @default(now())
+  sentAt              DateTime?
+  createdAt           DateTime  @default(now())
+
+  @@index([userId, status])
+}
+
+model OutboxEvent {
+  id              String    @id @default(cuid())
+  aggregateType   String
+  aggregateId     String
+  eventType       String
+  payloadRedacted String    @default("{}")
+  attempts        Int       @default(0)
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  publishedAt     DateTime?
+  status          String    @default("PENDING") // PENDING | PUBLISHED | DEAD_LETTER
+
+  @@index([status])
+}
+
+model AuditEvent {
+  id            String   @id @default(cuid())
+  actorId       String?
+  actorRole     String?
+  subjectId     String?
+  action        String
+  resourceType  String
+  resourceId    String?
+  purpose       String?
+  outcome       String // ALLOW | DENY | ERROR
+  occurredAt    DateTime @default(now())
+  ipHash        String?
+  correlationId String?
+  metadataJson  String   @default("{}") // redacted
+
+  @@index([resourceType, resourceId])
+  @@index([actorId, occurredAt])
+}
+
+model ContentItem {
+  id          String    @id @default(cuid())
+  contentType String // RESULT_BLOCK | SAFETY_COPY | LEGAL | EDUCATIONAL
+  locale      String    @default("en")
+  version     Int       @default(1)
+  status      String    @default("DRAFT") // DRAFT | REVIEWED | RETIRED
+  title       String
+  body        String
+  authorId    String?
+  reviewerId  String?
+  sourceRef   String?
+  reviewDueAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([contentType, locale, status])
+}
+
+model DataRequest {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestType String // EXPORT | DELETION | CORRECTION
+  status      String    @default("RECEIVED") // RECEIVED | IN_PROGRESS | COMPLETED | REJECTED | PARTIALLY_COMPLETED
+  note        String    @default("") // explanation incl. retention limits
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([userId, status])
+}
+
+model FeatureFlag {
+  key         String   @id
+  environment String   @default("development")
+  enabled     Boolean  @default(false)
+  configJson  String   @default("{}")
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+}

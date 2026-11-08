@@ -1,0 +1,60 @@
+{
+  "environment": "DEMO_ONLY_SYNTHETIC_DATA",
+  "notice": "All records below are fictional and must never be presented as real patients, providers, clinical outcomes or live referrals.",
+  "users": [
+    {
+      "id": "demo-user-001",
+      "displayName": "Demo User 01",
+      "role": "INDIVIDUAL",
+      "locale": "en",
+      "region": "AE-AZ"
+    },
+    {
+      "id": "demo-clinician-001",
+      "displayName": "Demo Clinician 01",
+      "role": "PROFESSIONAL_SIMULATED",
+      "organisationId": "demo-org-001"
+    },
+    {
+      "id": "demo-ops-001",
+      "displayName": "Demo Operations 01",
+      "role": "OPS_ADMIN_SIMULATED"
+    }
+  ],
+  "providers": [
+    {
+      "id": "demo-provider-primary-01",
+      "name": "Example Primary Care Service",
+      "status": "DEMO_VERIFIED_SIMULATED",
+      "verification": "SIMULATED_ONLY",
+      "region": "AE-AZ",
+      "languages": [
+        "en",
+        "ar"
+      ],
+      "lastVerified": "SIMULATED"
+    },
+    {
+      "id": "demo-provider-mental-01",
+      "name": "Example Mental Health Service",
+      "status": "DEMO_VERIFIED_SIMULATED",
+      "verification": "SIMULATED_ONLY",
+      "region": "AE-AZ",
+      "languages": [
+        "en",
+        "ar"
+      ],
+      "lastVerified": "SIMULATED"
+    }
+  ],
+  "referralStatusScenario": [
+    "DRAFT",
+    "AWAITING_USER_CONSENT",
+    "READY_TO_SEND",
+    "PENDING_PROVIDER_ACKNOWLEDGEMENT",
+    "ACKNOWLEDGED",
+    "APPOINTMENT_SCHEDULED",
+    "FOLLOW_UP_DUE",
+    "FOLLOW_UP_COMPLETED"
+  ]
+}
