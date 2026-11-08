@@ -38,7 +38,7 @@ export default function LoginPage() {
         return;
       }
       const role = body?.user?.role;
-      if (role === "OPS_ADMIN_SIMULATED") router.push("/ops");
+      if (role === "OPS_ADMIN_SIMULATED") router.push("/ops/overview");
       else if (role !== "INDIVIDUAL") router.push("/professional/inbox");
       else router.push("/app");
       router.refresh();
