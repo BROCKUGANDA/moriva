@@ -176,6 +176,17 @@
   #main-content:focus {
     outline: none;
   }
+  /* Anchor targets clear the sticky header */
+  :target {
+    scroll-margin-top: 5rem;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  ::selection {
+    background: var(--moriva-mist);
+    color: var(--moriva-ink);
+  }
 }
 
 @layer utilities {

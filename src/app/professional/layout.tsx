@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/domains/identity/service";
 import { ProfessionalNav } from "@/components/navigation/professional-nav";
 import { DemoBanner, SimulationBanner } from "@/components/moriva/status";
+import { getEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,10 @@ export default async function ProfessionalLayout({ children }: { children: React
   if (!["PROFESSIONAL_SIMULATED", "PROVIDER_COORDINATOR_SIMULATED", "CLINICAL_GOVERNANCE_SIMULATED"].includes(user.role)) {
     redirect(user.role === "OPS_ADMIN_SIMULATED" ? "/ops" : "/app");
   }
+  const demoMode = getEnv().demoMode;
   return (
     <div className="flex min-h-screen flex-col bg-[#F3F6F4]">
-      <DemoBanner />
+      <DemoBanner label={demoMode ? "DEMO ENVIRONMENT — SYNTHETIC DATA ONLY" : "PREVIEW DEPLOYMENT — SYNTHETIC SAMPLE DATA"} />
       <ProfessionalNav displayName={user.displayName} />
       <div className="moriva-container flex-1 py-6">
         <SimulationBanner className="mb-4" />

@@ -41,7 +41,7 @@ export default async function AppOverviewPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-3" data-testid="overview-cards">
-        <article className="rounded-2xl border border-moriva-line bg-white p-5 shadow-card">
+        <article className="flex flex-col rounded-2xl border border-moriva-line bg-white p-5 shadow-card">
           <h2 className="font-display text-sm font-bold uppercase tracking-wide text-moriva-slate">Last check-in</h2>
           {lastSession?.result ? (
             <>
@@ -57,22 +57,27 @@ export default async function AppOverviewPage() {
               </Link>
             </>
           ) : (
-            <p className="mt-2 text-sm text-moriva-slate">No completed check-in yet — that's okay.</p>
+            <p className="mt-2 text-sm text-moriva-slate">No completed check-in yet — that's okay. A short check-in takes about three minutes.</p>
           )}
-          <div className="mt-3 flex gap-2">
-            <Link href="/app/check-in" className="min-h-11 rounded-lg bg-moriva-teal px-4 py-2 text-sm font-semibold text-white hover:bg-moriva-teal-soft">
+          <div className="mt-auto flex flex-wrap gap-2 pt-4">
+            <Link href="/app/check-in" className="min-h-11 rounded-lg bg-moriva-teal px-4 py-2 text-sm font-semibold leading-6 text-white hover:bg-moriva-teal-soft">
               Brief check-in
             </Link>
-            <Link href="/app/assessments" className="min-h-11 rounded-lg border border-moriva-teal px-4 py-2 text-sm font-semibold text-moriva-teal hover:bg-secondary">
+            <Link href="/app/assessments" className="min-h-11 rounded-lg border border-moriva-teal px-4 py-2 text-sm font-semibold leading-6 text-moriva-teal hover:bg-secondary">
               Assessments
             </Link>
           </div>
         </article>
 
-        <article className="rounded-2xl border border-moriva-line bg-white p-5 shadow-card">
+        <article className="flex flex-col rounded-2xl border border-moriva-line bg-white p-5 shadow-card">
           <h2 className="font-display text-sm font-bold uppercase tracking-wide text-moriva-slate">Open referrals</h2>
           {openReferrals.length === 0 ? (
-            <p className="mt-2 text-sm text-moriva-slate">No open referrals. Explore support options to create one when you're ready.</p>
+            <>
+              <p className="mt-2 text-sm text-moriva-slate">No open referrals. Explore support options to create one when you're ready.</p>
+              <Link href="/app/providers" className="mt-3 inline-block text-sm font-semibold text-moriva-teal underline-offset-4 hover:underline">
+                Find support options →
+              </Link>
+            </>
           ) : (
             <ul className="mt-2 space-y-2">
               {openReferrals.map((r) => (
@@ -88,22 +93,24 @@ export default async function AppOverviewPage() {
               ))}
             </ul>
           )}
-          <Link href="/app/referrals" className="mt-3 inline-block text-sm font-semibold text-moriva-teal underline-offset-4 hover:underline">
+          <Link href="/app/referrals" className="mt-auto inline-block pt-4 text-sm font-semibold text-moriva-teal underline-offset-4 hover:underline">
             All referrals →
           </Link>
         </article>
 
-        <article className="rounded-2xl border border-moriva-line bg-white p-5 shadow-card">
+        <article className="flex flex-col rounded-2xl border border-moriva-line bg-white p-5 shadow-card">
           <h2 className="font-display text-sm font-bold uppercase tracking-wide text-moriva-slate">Your privacy</h2>
           <p className="mt-2 text-sm text-moriva-slate">
             {consents} active permission{consents === 1 ? "" : "s"}. You decide who sees what — review or withdraw any time.
           </p>
-          <Link href="/app/privacy" className="mt-3 inline-block min-h-11 rounded-lg border border-moriva-teal px-4 py-2 text-sm font-semibold leading-6 text-moriva-teal hover:bg-secondary">
-            Privacy centre
-          </Link>
-          <Link href="/help-now" className="mt-3 ml-2 inline-block min-h-11 rounded-lg bg-state-critical px-4 py-2 text-sm font-bold leading-6 text-white hover:opacity-90">
-            Help now
-          </Link>
+          <div className="mt-auto flex flex-wrap gap-2 pt-4">
+            <Link href="/app/privacy" className="min-h-11 rounded-lg border border-moriva-teal px-4 py-2 text-sm font-semibold leading-6 text-moriva-teal hover:bg-secondary">
+              Privacy centre
+            </Link>
+            <Link href="/help-now" className="min-h-11 rounded-lg bg-state-critical px-4 py-2 text-sm font-bold leading-6 text-white hover:opacity-90">
+              Help now
+            </Link>
+          </div>
         </article>
       </div>
 

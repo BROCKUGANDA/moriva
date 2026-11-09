@@ -7,14 +7,14 @@ import { AlertTriangle, ShieldQuestion, Info, CheckCircle2, XCircle } from "luci
  * Status/notice components. Text + icon always accompany colour (AC-UX-07).
  */
 
-export function DemoBanner() {
+export function DemoBanner({ label = "DEMO ENVIRONMENT — SYNTHETIC DATA ONLY" }: { label?: string }) {
   return (
     <div
       role="note"
-      aria-label="Demo environment notice"
+      aria-label="Environment notice"
       className="w-full bg-moriva-ink px-4 py-1.5 text-center text-xs font-semibold tracking-wide text-white"
     >
-      DEMO ENVIRONMENT — SYNTHETIC DATA ONLY
+      {label}
     </div>
   );
 }
