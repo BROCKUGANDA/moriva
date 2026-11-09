@@ -32,7 +32,7 @@ jobs:
       - name: Build and push
         run: |
           set -euo pipefail
-          IMAGE="$REGISTRY/$IMAGE_NAME"
+          IMAGE="$REGISTRY/${IMAGE_NAME,,}"
           SHA_TAG="${GITHUB_SHA::12}"
           REF="${GITHUB_REF_NAME}"
           tags=(-t "$IMAGE:sha-$SHA_TAG")
