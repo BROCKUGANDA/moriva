@@ -1,21 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { LocaleProvider } from "@/components/moriva/locale-provider";
 import { cookies } from "next/headers";
 import { isRtl } from "@/i18n/dictionaries";
 
-const manrope = Manrope({
+const manrope = localFont({
+  src: "../../public/fonts/manrope-var.woff2",
   variable: "--font-manrope",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
+  weight: "400 800",
   display: "swap",
 });
 
-const inter = Inter({
+const inter = localFont({
+  src: "../../public/fonts/inter-var.woff2",
   variable: "--font-inter",
-  subsets: ["latin"],
+  weight: "100 900",
   display: "swap",
 });
 
