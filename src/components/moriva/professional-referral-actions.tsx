@@ -28,7 +28,7 @@ export function ProfessionalReferralActions({ referralId, state, version }: { re
     try {
       const res = await fetch(`/api/v1/professional/referrals/${referralId}/${action}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `pro-${referralId}-${action}-${version}` },
         body: JSON.stringify({ note: note || undefined, safeReasonCode: action === "decline" ? reason : undefined }),
       });
       const b = await res.json().catch(() => null);

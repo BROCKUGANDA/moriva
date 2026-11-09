@@ -37,7 +37,7 @@ export function ProviderSearch() {
       if (language) qs.set("language", language);
       fetch(`/api/v1/providers?${qs}`)
         .then((r) => r.json())
-        .then((b) => setProviders(b.providers ?? []))
+        .then((b) => setProviders(b.data ?? b.providers ?? []))
         .catch(() => setProviders([]));
     }, 250);
     return () => clearTimeout(t);

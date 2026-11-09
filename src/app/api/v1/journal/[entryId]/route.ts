@@ -1,4 +1,4 @@
-import { withApi, jsonOk, requireIdempotencyKey } from "@/lib/api";
+import { withApi, jsonOk } from "@/lib/api";
 import { requireUser } from "@/domains/identity/service";
 import { db } from "@/lib/db";
 import { MorivaError } from "@/lib/errors";

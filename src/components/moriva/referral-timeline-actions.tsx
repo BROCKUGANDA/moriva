@@ -32,7 +32,7 @@ export function ReferralTimelineActions({ referralId, state, version }: { referr
         // after revoking referral consent, withdraw the referral itself
         await fetch(`/api/v1/referrals/${referralId}/transitions`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+          headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `withdraw-${referralId}-${version}` },
           body: JSON.stringify({ to: "WITHDRAWN_CONSENT", expectedVersion: version }),
         }).catch(() => null);
         router.refresh();
@@ -41,7 +41,7 @@ export function ReferralTimelineActions({ referralId, state, version }: { referr
       if (kind === "cancel") {
         const res = await fetch(`/api/v1/referrals/${referralId}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+          headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `cancel-${referralId}-${version}` },
           body: JSON.stringify({ action: "cancel" }),
         });
         const b = await res.json().catch(() => null);
@@ -54,7 +54,7 @@ export function ReferralTimelineActions({ referralId, state, version }: { referr
       }
       const res = await fetch(`/api/v1/referrals/${referralId}/follow-up`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `followup-${referralId}-${kind}-${Date.now()}` },
         body: JSON.stringify({ action: kind === "contact" ? "PATIENT_CONTACT_CONFIRMED" : "FOLLOW_UP_COMPLETED", note: note || undefined }),
       });
       const b = await res.json().catch(() => null);

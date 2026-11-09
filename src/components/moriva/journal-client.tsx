@@ -17,7 +17,7 @@ export function JournalClient() {
   const load = () =>
     fetch("/api/v1/journal")
       .then((r) => r.json())
-      .then((b) => setEntries(b.entries ?? []))
+      .then((b) => setEntries(b.data ?? b.entries ?? []))
       .catch(() => setEntries([]));
 
   useEffect(() => { load(); }, []);
@@ -29,7 +29,7 @@ export function JournalClient() {
     try {
       const res = await fetch("/api/v1/journal", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `journal-${Date.now()}` },
         body: JSON.stringify({ bodyText: draft.trim().slice(0, 5000) }),
       });
       if (res.ok) {

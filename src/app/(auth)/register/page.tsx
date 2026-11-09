@@ -49,7 +49,7 @@ export default function RegisterPage() {
       for (const purpose of purposes) {
         await fetch("/api/v1/me/consents", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+          headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `reg-consent-${purpose}` },
           body: JSON.stringify({ purpose }),
         });
       }

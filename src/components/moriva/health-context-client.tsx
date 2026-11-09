@@ -29,7 +29,7 @@ export function HealthContextClient() {
   const load = () =>
     fetch("/api/v1/health-context")
       .then((r) => r.json())
-      .then((b) => setItems(b.items ?? []))
+      .then((b) => setItems(b.data ?? b.items ?? []))
       .catch(() => setItems([]));
   useEffect(() => { load(); }, []);
 
@@ -40,7 +40,7 @@ export function HealthContextClient() {
     try {
       const res = await fetch("/api/v1/health-context", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `hc-${Date.now()}` },
         body: JSON.stringify({ itemType: type, valueText: value.trim().slice(0, 500) }),
       });
       if (res.ok) {

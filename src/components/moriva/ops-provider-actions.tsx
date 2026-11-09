@@ -26,7 +26,7 @@ export function OpsProviderActions({ providerId, current }: { providerId: string
     try {
       const res = await fetch(`/api/v1/ops/providers/${providerId}/verify`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `verify-${providerId}-${action}-${Date.now()}` },
         body: JSON.stringify({ action }),
       });
       if (!res.ok) {

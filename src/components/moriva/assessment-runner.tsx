@@ -103,7 +103,7 @@ export function AssessmentRunner({ sessionId }: { sessionId: string }) {
     try {
       const res = await fetch(`/api/v1/assessment-sessions/${sessionId}/complete`, {
         method: "POST",
-        headers: { "x-csrf-token": csrf },
+        headers: { "x-csrf-token": csrf, "Idempotency-Key": `complete-${sessionId}` },
       });
       const body = await res.json().catch(() => null);
       if (res.ok) {
@@ -111,7 +111,8 @@ export function AssessmentRunner({ sessionId }: { sessionId: string }) {
         return;
       }
       if (body?.code === "ASSESSMENT_INCOMPLETE") {
-        const missing = String(body?.details?.missing ?? "").split(",").filter(Boolean);
+        const raw = body?.details?.missing;
+        const missing: string[] = Array.isArray(raw) ? raw : String(raw ?? "").split(",").filter(Boolean);
         const firstMissing = data.items.findIndex((i) => missing.includes(i.itemKey));
         if (firstMissing >= 0) setIndex(firstMissing);
         setSubmitError(body.message);

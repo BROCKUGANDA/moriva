@@ -23,7 +23,7 @@ export function OnboardingConsentReview() {
   const load = () =>
     fetch("/api/v1/me/consents")
       .then((r) => r.json())
-      .then((b) => setRows(b.consents ?? []))
+      .then((b) => setRows(b.data ?? b.consents ?? []))
       .catch(() => setRows([]));
 
   useEffect(() => { load(); }, []);
@@ -32,7 +32,7 @@ export function OnboardingConsentReview() {
     setBusy(true);
     try {
       if (grant) {
-        await fetch("/api/v1/me/consents", { method: "POST", headers: { "Content-Type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify({ purpose: row.purpose }) });
+        await fetch("/api/v1/me/consents", { method: "POST", headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `consent-${row.purpose}-${Date.now()}` }, body: JSON.stringify({ purpose: row.purpose }) });
       } else {
         await fetch("/api/v1/me/consents", { method: "DELETE", headers: { "Content-Type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify({ purpose: row.purpose }) });
       }
