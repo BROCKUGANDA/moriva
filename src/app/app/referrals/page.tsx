@@ -25,7 +25,7 @@ const STATE_TONE: Record<string, "success" | "warning" | "teal" | "neutral" | "c
 export default async function ReferralsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  const referrals = await listUserReferrals(user.id);
+  const { items: referrals } = await listUserReferrals(user.id, { limit: 50 });
 
   return (
     <div>

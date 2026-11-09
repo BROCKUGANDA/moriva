@@ -1,4 +1,5 @@
-import { withApi, jsonOk } from "@/lib/api";
+import { db } from "@/lib/db";
+import { withApi, jsonOk, readJsonSafe } from "@/lib/api";
 import { z } from "zod";
 import { requireUser } from "@/domains/identity/service";
 import { getOwnedSession } from "@/domains/assessment/service";
@@ -6,16 +7,13 @@ import { MorivaError } from "@/lib/errors";
 import { SYNTHETIC_TRIGGER_THRESHOLD } from "@/domains/assessment/scoring";
 
 /** Session state for the questionnaire runner (ownership-scoped). */
-export const GET = withApi({ rate: "assessment" })(async ({ params }) => {
+export const GET = withApi({ rate: "assessment" })(async ({ params, requestId }) => {
   const user = await requireUser();
   const session = await getOwnedSession(user.id, params.id);
-  const items = await (async () => {
-    const { db } = await import("@/lib/db");
-    return db.instrumentItem.findMany({
-      where: { instrumentVersionId: session.instrumentVersionId },
-      orderBy: { ordinal: "asc" },
-    });
-  })();
+  const items = await db.instrumentItem.findMany({
+    where: { instrumentVersionId: session.instrumentVersionId },
+    orderBy: { ordinal: "asc" },
+  });
   return jsonOk(
     {
       session: {
@@ -35,28 +33,34 @@ export const GET = withApi({ rate: "assessment" })(async ({ params }) => {
         riskItemKey: session.instrumentVersion.riskItemKey,
         triggerThreshold: SYNTHETIC_TRIGGER_THRESHOLD,
       },
-      items: items.map((i) => ({
-        itemKey: i.itemKey,
-        ordinal: i.ordinal,
-        promptEn: i.promptEn,
-        helperEn: i.helperEn,
-        required: i.required,
-        schema: JSON.parse(i.responseSchema),
-      })),
+      items: items.map((i) => {
+        let schema = null;
+        try {
+          schema = JSON.parse(i.responseSchema);
+        } catch {
+          throw new MorivaError("SCORING_CONFIG_INVALID");
+        }
+        return {
+          itemKey: i.itemKey,
+          ordinal: i.ordinal,
+          promptEn: i.promptEn,
+          helperEn: i.helperEn,
+          required: i.required,
+          schema,
+        };
+      }),
       responses: session.responses.map((r) => ({ itemKey: r.itemId, value: r.responseValue, answeredAt: r.answeredAt })),
-    },
-    ""
+    }, requestId
   );
 });
 
 const AbandonBody = z.object({ action: z.literal("abandon") });
 
-export const PATCH = withApi({ rate: "assessment", csrf: true })(async ({ req, params }) => {
+export const PATCH = withApi({ rate: "assessment", csrf: true })(async ({ req, params, requestId }) => {
   const user = await requireUser();
   const session = await getOwnedSession(user.id, params.id);
-  const parsed = AbandonBody.safeParse(await req.json().catch(() => null));
+  const parsed = AbandonBody.safeParse(await readJsonSafe(req));
   if (!parsed.success) throw new MorivaError("VALIDATION_FAILED");
-  const { db } = await import("@/lib/db");
-  await db.assessmentSession.update({ where: { id: session.id }, data: { status: "ABANDONED" } });
-  return jsonOk({ status: "ABANDONED" }, "");
+  await db.assessmentSession.updateMany({ where: { id: session.id, status: { in: ["CREATED", "IN_PROGRESS"] } }, data: { status: "ABANDONED" } });
+  return jsonOk({ status: "ABANDONED" }, requestId);
 });

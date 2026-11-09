@@ -19,14 +19,79 @@ export type ApiContext = {
 
 export type ApiHandler = (ctx: ApiContext) => Promise<NextResponse | Response>;
 
-export function jsonOk(body: unknown, requestId: string, status = 200) {
-  return NextResponse.json(body, { status, headers: { "x-request-id": requestId } });
+export function jsonOk(body: Record<string, unknown>, requestId: string, status = 200) {
+  const withId = body && typeof body === "object" && !Array.isArray(body) && !("requestId" in body)
+    ? { ...body, requestId }
+    : body;
+  return NextResponse.json(withId, { status, headers: { "x-request-id": requestId } });
 }
+
+export type PageInfo = { nextCursor: string | null; hasMore: boolean; limit: number };
+
+export function parsePagination(searchParams: URLSearchParams): { limit: number; cursor: string | null } {
+  const rawLimit = Number(searchParams.get("limit") ?? searchParams.get("take") ?? "20");
+  const limit = Number.isFinite(rawLimit) ? Math.min(100, Math.max(1, Math.floor(rawLimit))) : 20;
+  const cursor = searchParams.get("cursor") ?? null;
+  return { limit, cursor };
+}
+
+export function jsonPage(data: unknown[], page: PageInfo, requestId: string, extra: Record<string, unknown> = {}, status = 200) {
+  return jsonOk({ data, page, ...extra }, requestId, status);
+}
+
+export function idempotencyKey(req: NextRequest): string | null {
+  const key = req.headers.get("idempotency-key") ?? req.headers.get("x-idempotency-key") ?? null;
+  if (!key) return null;
+  return key.length >= 8 && key.length <= 128 ? key : null;
+}
+
+export function requireIdempotencyKey(req: NextRequest): string {
+  const key = idempotencyKey(req);
+  if (!key) {
+    throw new MorivaError("VALIDATION_FAILED", {
+      details: { field: "Idempotency-Key" },
+      messageOverride: "This action needs an Idempotency-Key header (min 8 characters) so retries are safe.",
+    });
+  }
+  return key;
+}
+
+const MAX_BODY_BYTES = 1_000_000;
+
+async function readJsonSafe(req: NextRequest): Promise<unknown> {
+  const len = req.headers.get("content-length");
+  if (len && Number(len) > MAX_BODY_BYTES) {
+    throw new MorivaError("PAYLOAD_TOO_LARGE");
+  }
+  const ct = req.headers.get("content-type") ?? "";
+  if (req.method !== "GET" && req.method !== "HEAD" && ct && !ct.includes("application/json")) {
+    throw new MorivaError("UNSUPPORTED_MEDIA_TYPE");
+  }
+  try {
+    const text = await req.text();
+    if (!text) return null;
+    if (text.length > MAX_BODY_BYTES) throw new MorivaError("PAYLOAD_TOO_LARGE");
+    return JSON.parse(text);
+  } catch (e) {
+    if (e instanceof MorivaError) throw e;
+    throw new MorivaError("VALIDATION_FAILED", { messageOverride: "Request body must be valid JSON." });
+  }
+}
+
+export { readJsonSafe };
 
 function clientIp(req: NextRequest): string | null {
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0]?.trim() ?? null;
   return req.headers.get("x-real-ip");
+}
+
+function shaLite(input: string): string {
+  let h = 0;
+  for (let i = 0; i < input.length; i++) {
+    h = (h * 31 + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h).toString(36);
 }
 
 function isLoopback(ip: string | null): boolean {
@@ -60,13 +125,45 @@ export function withApi(opts: { rate?: RateClass; csrf?: boolean } = {}) {
         //    are not throttled. Production limits every client regardless of source.
         const env = getEnv();
         const skipLimit = env.nodeEnv !== "production" && env.demoMode && isLoopback(ip);
+        let remaining = -1;
+        let retryAfter = 0;
         if (!skipLimit) {
-          const limit = rateLimit(`api:${rateClass}:${ip ?? "unknown"}`, RATE_CLASSES[rateClass]);
-          if (!limit.allowed) {
+          const ipKey = `api:${rateClass}:${ip ?? "unknown"}`;
+          const ipLimit = rateLimit(ipKey, RATE_CLASSES[rateClass]);
+          remaining = ipLimit.remaining;
+          retryAfter = ipLimit.retryAfterSeconds;
+          if (!ipLimit.allowed) {
             return NextResponse.json(
               { code: "RATE_LIMITED", message: "Too many requests. Please try again in a moment.", requestId, retryable: true },
-              { status: 429, headers: { "x-request-id": requestId, "Retry-After": String(limit.retryAfterSeconds) } }
+              {
+                status: 429,
+                headers: {
+                  "x-request-id": requestId,
+                  "Retry-After": String(ipLimit.retryAfterSeconds),
+                  "X-RateLimit-Limit": String(RATE_CLASSES[rateClass].capacity),
+                  "X-RateLimit-Remaining": "0",
+                },
+              }
             );
+          }
+          if (rateClass === "auth") {
+            const fp = req.headers.get("x-forwarded-for") ?? ip ?? "unknown";
+            const keyLimit = rateLimit(`api:auth:key:${shaLite(fp)}`, { capacity: 60, refillPerMinute: 30 });
+            if (!keyLimit.allowed) {
+              return NextResponse.json(
+                { code: "RATE_LIMITED", message: "Too many attempts. Please try again in a moment.", requestId, retryable: true },
+                {
+                  status: 429,
+                  headers: {
+                    "x-request-id": requestId,
+                    "Retry-After": String(keyLimit.retryAfterSeconds),
+                    "X-RateLimit-Limit": "60",
+                    "X-RateLimit-Remaining": "0",
+                  },
+                }
+              );
+            }
+            remaining = Math.min(remaining, keyLimit.remaining);
           }
         }
 
@@ -87,6 +184,11 @@ export function withApi(opts: { rate?: RateClass; csrf?: boolean } = {}) {
         // 4. handler
         const res = await handler({ req, requestId, ip, params });
         res.headers.set("x-request-id", requestId);
+        if (remaining >= 0) {
+          res.headers.set("X-RateLimit-Limit", String(RATE_CLASSES[rateClass].capacity));
+          res.headers.set("X-RateLimit-Remaining", String(remaining));
+          if (retryAfter > 0) res.headers.set("Retry-After", String(retryAfter));
+        }
         return res;
       } catch (err) {
         const { status, body } = toApiProblem(err, requestId);

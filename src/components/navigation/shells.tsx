@@ -180,6 +180,7 @@ export function IndividualBottomNav() {
   const pathname = usePathname();
   const items = [
     { href: "/app", label: t.nav.dashboard, icon: "M4 6h16M4 12h16M4 18h10" },
+    { href: "/app/assessments", label: t.nav.assessments, icon: "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" },
     { href: "/app/check-in", label: t.nav.checkin, icon: "M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" },
     { href: "/app/support", label: t.nav.support, icon: "M12 21s-7-4.6-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.4-9 9-9 9Z" },
     { href: "/app/referrals", label: t.nav.referrals, icon: "M4 12h12m0 0-4-4m4 4-4 4M20 4v16" },
@@ -187,7 +188,7 @@ export function IndividualBottomNav() {
   ];
   return (
     <nav aria-label="Primary (mobile)" className="sticky bottom-0 z-50 border-t border-moriva-line bg-white md:hidden">
-      <div className="grid grid-cols-5 pb-[env(safe-area-inset-bottom)]">
+      <div className="grid grid-cols-6 pb-[env(safe-area-inset-bottom)]">
         {items.map((i) => (
           <Link
             key={i.href}

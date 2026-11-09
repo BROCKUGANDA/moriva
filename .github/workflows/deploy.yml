@@ -1,0 +1,46 @@
+name: Deploy to VPS
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag to deploy (default latest)
+        required: false
+        default: latest
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, moriva]
+    env:
+      TAG: ${{ inputs.tag || 'latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy stack
+        run: |
+          set -euo pipefail
+          cd deploy
+          IMAGE="ghcr.io/${{ github.repository }}:${TAG}"
+          echo "Deploying ${IMAGE}"
+          IMAGE="${IMAGE}" docker compose --env-file /mnt/data/moriva/.env pull app
+          IMAGE="${IMAGE}" docker compose --env-file /mnt/data/moriva/.env up -d --remove-orphans
+          docker compose --env-file /mnt/data/moriva/.env ps
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/api/health | grep -q '"status":"ready"'; then
+              echo "healthy"; exit 0
+            fi
+            sleep 5
+          done
+          echo "health check failed"; docker logs moriva-app-1 --tail 100; exit 1
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          cd deploy
+          docker compose --env-file /mnt/data/moriva/.env up -d --remove-orphans moriva-app-prev || true

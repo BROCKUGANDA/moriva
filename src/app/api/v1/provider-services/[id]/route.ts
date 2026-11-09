@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { MorivaError } from "@/lib/errors";
 
 /** Provider service detail (used by support option cards). Ownership not required — directory data is non-sensitive. */
-export const GET = withApi({ rate: "read" })(async ({ params }) => {
+export const GET = withApi({ rate: "read" })(async ({ params, requestId }) => {
   await requireUser();
   const s = await db.providerService.findUnique({
     where: { id: params.id },
@@ -29,7 +29,6 @@ export const GET = withApi({ rate: "read" })(async ({ params }) => {
         lastVerifiedAt: s.lastVerifiedAt,
         recheckDueAt: s.recheckDueAt,
       },
-    },
-    ""
+    }, requestId
   );
 });

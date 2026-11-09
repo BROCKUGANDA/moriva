@@ -15,7 +15,7 @@ import { SYNTHETIC_TRIGGER_THRESHOLD } from "./scoring";
 export async function getActiveInstrument(locale = "en") {
   const instrument = await db.instrument.findFirst({
     where: { status: { in: ["ACTIVE", "SIMULATION_ONLY"] } },
-    include: { versions: { orderBy: { effectiveAt: "desc" }, take: 1 } },
+    include: { versions: { where: { status: { in: ["APPROVED_SIMULATION", "APPROVED"] } }, orderBy: { effectiveAt: "desc" }, take: 1 } },
   });
   if (!instrument || instrument.versions.length === 0) return null;
   const version = instrument.versions[0];
@@ -33,22 +33,41 @@ export async function getActiveInstrument(locale = "en") {
   };
 }
 
-export async function createSession(userId: string, locale = "en") {
+export async function createSession(userId: string, locale = "en", idempotencyKey?: string) {
   const active = await getActiveInstrument(locale);
   if (!active) throw new MorivaError("INSTRUMENT_NOT_APPROVED");
   if (active.version.status === "RETIRED") throw new MorivaError("INSTRUMENT_VERSION_EXPIRED");
-  const session = await db.assessmentSession.create({
-    data: {
-      userId,
-      instrumentVersionId: active.version.id,
-      status: "CREATED",
-      locale,
-      scoringVersion: active.version.scoringVersion,
-      source: "WEB",
-    },
-  });
-  await audit({ actorId: userId, actorRole: "INDIVIDUAL", subjectId: userId, action: "ASSESSMENT_STARTED", resourceType: "assessment_session", resourceId: session.id, outcome: "ALLOW" });
-  return session;
+  if (idempotencyKey) {
+    const prior = await db.assessmentSession.findUnique({ where: { idempotencyKey } });
+    if (prior) {
+      if (prior.userId !== userId) throw new MorivaError("REQUEST_IDEMPOTENCY_CONFLICT");
+      return prior;
+    }
+  }
+  try {
+    const session = await db.assessmentSession.create({
+      data: {
+        userId,
+        instrumentVersionId: active.version.id,
+        status: "CREATED",
+        locale,
+        scoringVersion: active.version.scoringVersion,
+        source: "WEB",
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+      },
+    });
+    await audit({ actorId: userId, actorRole: "INDIVIDUAL", subjectId: userId, action: "ASSESSMENT_STARTED", resourceType: "assessment_session", resourceId: session.id, outcome: "ALLOW" });
+    return session;
+  } catch (e) {
+    if (idempotencyKey) {
+      const raced = await db.assessmentSession.findUnique({ where: { idempotencyKey } });
+      if (raced) {
+        if (raced.userId !== userId) throw new MorivaError("REQUEST_IDEMPOTENCY_CONFLICT");
+        return raced;
+      }
+    }
+    throw e;
+  }
 }
 
 /** Ownership-scoped fetch: a session is visible only to its subject (server-enforced). */
@@ -79,7 +98,12 @@ export async function saveResponse(
   // item must belong to this exact instrument version
   const item = await db.instrumentItem.findFirst({ where: { instrumentVersionId: version.id, itemKey: itemId } });
   if (!item) throw new MorivaError("VALIDATION_FAILED", { details: { field: "itemKey" } });
-  const schema = JSON.parse(item.responseSchema) as { min: number; max: number };
+  let schema: { min: number; max: number };
+  try {
+    schema = JSON.parse(item.responseSchema) as { min: number; max: number };
+  } catch {
+    throw new MorivaError("SCORING_CONFIG_INVALID");
+  }
   if (value !== null && (!Number.isInteger(value) || value < schema.min || value > schema.max)) {
     throw new MorivaError("VALIDATION_FAILED", { details: { field: "value" } });
   }
@@ -90,7 +114,12 @@ export async function saveResponse(
     update: { responseValue: value, answeredAt: new Date() },
   });
   if (session.status === "CREATED") {
-    await db.assessmentSession.update({ where: { id: session.id }, data: { status: "IN_PROGRESS" } });
+    await db.assessmentSession.updateMany({ where: { id: session.id, status: "CREATED" }, data: { status: "IN_PROGRESS" } });
+  }
+  // re-check: complete() may have scored the session while we were writing
+  const fresh = await db.assessmentSession.findUnique({ where: { id: session.id }, select: { status: true } });
+  if (fresh && ["SCORED", "COMPLETED"].includes(fresh.status)) {
+    throw new MorivaError("REFERRAL_STATE_CONFLICT", { messageOverride: "This assessment was just submitted. Your answer was not saved." });
   }
   // urgent-risk check runs immediately on save (PRD §7.3: do not wait until final submit)
   const responses = await db.assessmentResponse.findMany({ where: { sessionId: session.id } });
@@ -105,6 +134,12 @@ export type CompleteOutcome =
 
 export async function completeSession(userId: string, sessionId: string): Promise<CompleteOutcome> {
   const session = await getOwnedSession(userId, sessionId);
+  if (session.status === "EXPIRED") {
+    throw new MorivaError("REFERRAL_STATE_CONFLICT", { messageOverride: "This assessment session has expired. Please start a new one." });
+  }
+  if (session.status === "ABANDONED" || session.status === "CANCELLED" || session.status === "INVALIDATED_BY_INSTRUMENT_RETIREMENT") {
+    throw new MorivaError("REFERRAL_STATE_CONFLICT", { messageOverride: "This assessment session is closed and cannot be submitted." });
+  }
   if (session.status === "SCORED" || session.status === "COMPLETED") {
     // repeated submit: return existing outcome honestly
     if (session.result) {
@@ -124,7 +159,12 @@ export async function completeSession(userId: string, sessionId: string): Promis
     where: { instrumentVersionId: session.instrumentVersionId },
     orderBy: { ordinal: "asc" },
   })) as unknown as ItemDef[];
-  const bands = JSON.parse(session.instrumentVersion.interpretationEn || "[]") as InterpretationBand[];
+  let bands: InterpretationBand[];
+  try {
+    bands = JSON.parse(session.instrumentVersion.interpretationEn || "[]") as InterpretationBand[];
+  } catch {
+    throw new MorivaError("SCORING_CONFIG_INVALID");
+  }
   const responseValues: ResponseValue[] = session.responses.map((r) => ({ itemKey: r.itemId, value: r.responseValue }));
 
   const validation = validateResponseSet(items, responseValues);
@@ -143,7 +183,11 @@ export async function completeSession(userId: string, sessionId: string): Promis
   }
 
   const result = await db.$transaction(async (tx) => {
-    await tx.assessmentSession.update({ where: { id: session.id }, data: { status: "SCORED", completedAt: new Date() } });
+    // CAS: only score from an open state; concurrent complete/abandon loses here → 409 via P2025.
+    await tx.assessmentSession.updateMany({
+      where: { id: session.id, status: { in: ["CREATED", "IN_PROGRESS"] } },
+      data: { status: "SCORED", completedAt: new Date() },
+    });
     return tx.assessmentResult.upsert({
       where: { sessionId: session.id },
       create: {
@@ -161,10 +205,15 @@ export async function completeSession(userId: string, sessionId: string): Promis
   return { scored: true, resultId: result.id, interpretationCode: outcome.interpretationCode, rawScore: outcome.rawScore, transformedScore: outcome.transformedScore };
 }
 
-export async function listUserSessions(userId: string) {
-  return db.assessmentSession.findMany({
-    where: { userId },
+export async function listUserSessions(userId: string, opts: { limit?: number; cursor?: string | null } = {}) {
+  const limit = Math.min(100, Math.max(1, opts.limit ?? 20));
+  const rows = await db.assessmentSession.findMany({
+    where: { userId, ...(opts.cursor ? { startedAt: { lt: new Date(opts.cursor) } } : {}) },
     orderBy: { startedAt: "desc" },
+    take: limit + 1,
     include: { instrumentVersion: { include: { instrument: true } }, result: true },
   });
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  return { items, nextCursor: hasMore ? items[items.length - 1].startedAt.toISOString() : null, hasMore };
 }

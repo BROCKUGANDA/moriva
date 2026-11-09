@@ -2,7 +2,7 @@ import { withApi, jsonOk } from "@/lib/api";
 import { requireUser } from "@/domains/identity/service";
 import { getProvider } from "@/domains/directory/service";
 
-export const GET = withApi({ rate: "read" })(async ({ params }) => {
+export const GET = withApi({ rate: "read" })(async ({ params, requestId }) => {
   await requireUser();
   const p = await getProvider(params.id);
   return jsonOk(
@@ -31,7 +31,6 @@ export const GET = withApi({ rate: "read" })(async ({ params }) => {
           referrable: ["VERIFIED", "DEMO_VERIFIED_SIMULATED"].includes(p.verificationStatus) && s.status === "ACTIVE",
         })),
       },
-    },
-    ""
+    }, requestId
   );
 });

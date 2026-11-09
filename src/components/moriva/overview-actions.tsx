@@ -7,21 +7,27 @@ import { Button } from "@/components/ui/button";
 export function IndividualOverviewActions() {
   const [checkedIn, setCheckedIn] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const csrf = typeof document !== "undefined" ? document.cookie.split("; ").find((c) => c.startsWith("moriva_csrf="))?.split("=")[1] ?? "" : "";
 
   async function mood(v: 1 | 2 | 3 | 4) {
     setBusy(true);
+    setError(null);
     try {
-      // simple in-app note: a lightweight, non-validated mood tag stored as a notification-free check-in
       const res = await fetch("/api/v1/check-ins", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `overview-${Date.now()}-${v}` },
         body: JSON.stringify({ mood: v }),
       });
       if (res.ok) {
         setCheckedIn(["", "Rough", "Low", "Okay", "Good"][v]);
         setTimeout(() => window.location.reload(), 600);
+      } else {
+        const body = await res.json().catch(() => null);
+        setError(body?.message ?? "Could not save your check-in. Please try again.");
       }
+    } catch {
+      setError("Could not save your check-in. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -40,6 +46,7 @@ export function IndividualOverviewActions() {
           </Button>
         ))}
         {checkedIn && <span role="status" className="self-center text-sm font-semibold text-state-success">Noted — thanks for checking in.</span>}
+        {error && <span role="alert" className="self-center text-sm font-semibold text-state-critical">{error}</span>}
       </div>
     </section>
   );

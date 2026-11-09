@@ -1,4 +1,4 @@
-import { withApi, jsonOk } from "@/lib/api";
+import { withApi, jsonOk, jsonPage, parsePagination, requireIdempotencyKey, readJsonSafe } from "@/lib/api";
 import { z } from "zod";
 import { requireUser } from "@/domains/identity/service";
 import { db } from "@/lib/db";
@@ -11,9 +11,10 @@ import { MorivaError } from "@/lib/errors";
  */
 const Body = z.object({ mood: z.number().int().min(1).max(4) });
 
-export const POST = withApi({ rate: "assessment", csrf: true })(async ({ req }) => {
+export const POST = withApi({ rate: "assessment", csrf: true })(async ({ req, requestId }) => {
   const user = await requireUser();
-  const parsed = Body.safeParse(await req.json().catch(() => null));
+  requireIdempotencyKey(req);
+  const parsed = Body.safeParse(await readJsonSafe(req));
   if (!parsed.success) throw new MorivaError("VALIDATION_FAILED");
   const labels: Record<number, string> = { 1: "Rough", 2: "Low", 3: "Okay", 4: "Good" };
   await db.notification.create({
@@ -27,26 +28,28 @@ export const POST = withApi({ rate: "assessment", csrf: true })(async ({ req }) 
       sentAt: new Date(),
     },
   });
-  return jsonOk({ ok: true, tag: labels[parsed.data.mood], note: "This quick tag is not a validated score." }, "", 201);
+  return jsonOk({ ok: true, tag: labels[parsed.data.mood], note: "This quick tag is not a validated score." }, requestId, 201);
 });
 
-export const GET = withApi({ rate: "read" })(async () => {
+export const GET = withApi({ rate: "read" })(async ({ req, requestId }) => {
   const user = await requireUser();
+  const { limit, cursor } = parsePagination(req.nextUrl.searchParams);
   const rows = await db.notification.findMany({
-    where: { userId: user.id, purpose: "CHECK_IN" },
+    where: { userId: user.id, purpose: "CHECK_IN", ...(cursor ? { sentAt: { lt: new Date(cursor) } } : {}) },
     orderBy: { sentAt: "desc" },
-    take: 30,
+    take: limit + 1,
   });
-  return jsonOk(
-    {
-      checkIns: rows.map((r) => {
-        try {
-          return { at: r.sentAt, ...JSON.parse(r.nonSensitivePayload) };
-        } catch {
-          return { at: r.sentAt };
-        }
-      }),
-    },
-    ""
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  return jsonPage(
+    page.map((r) => {
+      try {
+        return { id: r.id, at: r.sentAt, ...JSON.parse(r.nonSensitivePayload) };
+      } catch {
+        return { at: r.sentAt };
+      }
+    }),
+    { nextCursor: hasMore && page.length > 0 && page[page.length - 1].sentAt ? page[page.length - 1].sentAt!.toISOString() : null, hasMore, limit },
+    requestId
   );
 });

@@ -27,9 +27,9 @@ export function PrivacyCentre() {
   const csrf = typeof document !== "undefined" ? document.cookie.split("; ").find((c) => c.startsWith("moriva_csrf="))?.split("=")[1] ?? "" : "";
 
   function load() {
-    fetch("/api/v1/me/consents").then((r) => r.json()).then((b) => setConsents(b.consents ?? [])).catch(() => setConsents([]));
-    fetch("/api/v1/me/data-requests").then((r) => r.json()).then((b) => setRequests(b.requests ?? [])).catch(() => setRequests([]));
-    fetch("/api/v1/me/access-history").then((r) => r.json()).then((b) => setAccess(b.events ?? [])).catch(() => setAccess([]));
+    fetch("/api/v1/me/consents").then((r) => r.json()).then((b) => setConsents(b.data ?? b.consents ?? [])).catch(() => setConsents([]));
+    fetch("/api/v1/me/data-requests").then((r) => r.json()).then((b) => setRequests(b.data ?? b.requests ?? [])).catch(() => setRequests([]));
+    fetch("/api/v1/me/access-history").then((r) => r.json()).then((b) => setAccess(b.data ?? b.events ?? [])).catch(() => setAccess([]));
   }
   useEffect(load, []);
 
@@ -37,25 +37,40 @@ export function PrivacyCentre() {
     setBusy(true);
     try {
       const res = grant
-        ? await fetch("/api/v1/me/consents", { method: "POST", headers: { "Content-Type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify({ purpose: row.purpose }) })
+        ? await fetch("/api/v1/me/consents", { method: "POST", headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `consent-${row.purpose}-${Date.now()}` }, body: JSON.stringify({ purpose: row.purpose }) })
         : await fetch("/api/v1/me/consents", { method: "DELETE", headers: { "Content-Type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify({ purpose: row.purpose, recipientId: row.recipientId }) });
       if (res.ok) setNotice(grant ? "Permission recorded." : "Withdrawn — future sharing under this permission is blocked.");
+      else {
+        const body = await res.json().catch(() => null);
+        setNotice(body?.message ?? "Could not update the permission. Please try again.");
+      }
       load();
     } finally {
       setBusy(false);
     }
   }
 
+  const [download, setDownload] = useState<{ filename: string; href: string } | null>(null);
+
   async function request(type: "EXPORT" | "DELETION") {
     setBusy(true);
     try {
       const res = await fetch("/api/v1/me/data-requests", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `datareq-${type}-${Date.now()}` },
         body: JSON.stringify({ requestType: type }),
       });
       const b = await res.json().catch(() => null);
-      if (res.ok) setNotice(type === "EXPORT" ? "Export request received — you'll find the file in your notifications when it's ready." : "Deletion request received. Records kept for legal/security reasons are explained in the request status.");
+      if (res.ok) {
+        if (type === "EXPORT" && b?.download) {
+          const blob = new Blob([JSON.stringify(b.download.payload, null, 2)], { type: "application/json" });
+          const href = URL.createObjectURL(blob);
+          setDownload({ filename: b.download.filename, href });
+          setNotice("Export ready — download it below. A copy of this request is also in your history.");
+        } else {
+          setNotice(type === "EXPORT" ? "Export request received — you'll find the file in your notifications when it's ready." : "Deletion request received. Records kept for legal/security reasons are explained in the request status.");
+        }
+      }
       else setNotice(b?.message ?? "Could not submit the request.");
       load();
     } finally {
@@ -139,6 +154,11 @@ export function PrivacyCentre() {
             <h3 className="font-display text-base font-bold text-moriva-ink">Export your data</h3>
             <p className="mt-1 text-sm text-moriva-slate">Receive a copy of your account, assessments, journal, referrals and consent records.</p>
             <Button onClick={() => request("EXPORT")} disabled={busy} className="mt-3 min-h-11 bg-moriva-teal font-semibold hover:bg-moriva-teal-soft">Request export</Button>
+            {download && (
+              <a href={download.href} download={download.filename} className="ml-2 inline-block min-h-11 rounded-lg border border-moriva-teal px-4 py-2 text-sm font-semibold text-moriva-teal hover:bg-secondary">
+                Download {download.filename}
+              </a>
+            )}
           </div>
           <div className="rounded-2xl border border-moriva-line bg-white p-5 shadow-card">
             <h3 className="font-display text-base font-bold text-moriva-ink">Request deletion</h3>

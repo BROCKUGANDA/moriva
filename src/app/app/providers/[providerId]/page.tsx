@@ -2,8 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getSessionUser } from "@/domains/identity/service";
 import { SectionHeading, VerificationBadge, StatusBadge, SimulationBanner } from "@/components/moriva/status";
-import { ReferralFlow } from "@/components/moriva/referral-flow";
-import { AssessmentPicker } from "@/components/moriva/assessment-picker";
+import { ProviderReferralSection } from "@/components/moriva/provider-referral-section";
 import Link from "next/link";
 
 export const metadata = { title: "Provider profile" };
@@ -66,13 +65,13 @@ export default async function ProviderProfilePage({ params }: { params: Promise<
       <section className="mt-6" aria-labelledby="refer">
         <h2 id="refer" className="font-display text-xl font-bold text-moriva-ink">Request a referral to this service</h2>
         {referrable ? (
-          <>
-            <AssessmentPicker sessions={sessions.map((s) => ({ id: s.id, name: s.instrumentVersion.instrument.displayName, version: s.instrumentVersion.version, code: s.result?.interpretationCode ?? "", completedAt: s.completedAt?.toISOString() ?? "" }))} />
-            <ReferralFlow providerServiceId={service.id} defaultReason="" />
-          </>
+          <ProviderReferralSection
+            providerServiceId={service.id}
+            sessions={sessions.map((s) => ({ id: s.id, name: s.instrumentVersion.instrument.displayName, version: s.instrumentVersion.version, code: s.result?.interpretationCode ?? "", completedAt: s.completedAt?.toISOString() ?? "", resultId: s.result?.id ?? null }))}
+          />
         ) : (
           <div className="mt-3 rounded-2xl border border-state-warning/40 bg-[#FBF3E4] p-4 text-sm text-state-warning">
-            This service is being re-verified and cannot receive new referrals right now. You can view other verified options.
+            This service is being re-verified and cannot receive new referrals right now. <Link href="/app/providers" className="font-semibold underline underline-offset-4">View other verified options</Link>.
           </div>
         )}
       </section>

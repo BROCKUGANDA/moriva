@@ -1,0 +1,10 @@
+{
+  "apps": [
+    {
+      "host": "moriva.local",
+      "upstream": "127.0.0.1:3000",
+      "health_uri": "/api/health",
+      "tls": "internal_or_ip"
+    }
+  ]
+}

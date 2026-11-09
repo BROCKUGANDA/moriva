@@ -87,11 +87,34 @@ export async function navigate(input: {
     where: { jurisdiction: regionCode, status: { in: ["DEMO_APPROVED", "APPROVED"] } },
     orderBy: { effectiveAt: "desc" },
   });
-  if (!rule) throw new MorivaError("PATHWAY_UNAVAILABLE");
-  if (rule.expiryAt && rule.expiryAt.getTime() < Date.now()) {
-    throw new MorivaError("PATHWAY_UNAVAILABLE");
+  let bundle: RuleBundle | null = null;
+  let ruleVersion = "bundled-fallback";
+  let rulesStatus: "DEMO_APPROVED" | "APPROVED" = "DEMO_APPROVED";
+  if (rule && (!rule.expiryAt || rule.expiryAt.getTime() >= Date.now())) {
+    try {
+      bundle = JSON.parse(rule.rulesJson) as RuleBundle;
+      ruleVersion = rule.version;
+      rulesStatus = rule.status as "DEMO_APPROVED" | "APPROVED";
+    } catch {
+      throw new MorivaError("SCORING_CONFIG_INVALID");
+    }
+  } else {
+    // expired/missing rules: fall back to the previous APPROVED bundle instead of a bare 503
+    const prior = rule ? await db.pathwayRule.findFirst({
+      where: { jurisdiction: regionCode, status: { in: ["DEMO_APPROVED", "APPROVED"] }, effectiveAt: { lt: rule.effectiveAt } },
+      orderBy: { effectiveAt: "desc" },
+    }).catch(() => null) : null;
+    if (prior && (!prior.expiryAt || prior.expiryAt.getTime() >= Date.now())) {
+      try {
+        bundle = JSON.parse(prior.rulesJson) as RuleBundle;
+        ruleVersion = prior.version;
+        rulesStatus = prior.status as "DEMO_APPROVED" | "APPROVED";
+      } catch {
+        throw new MorivaError("SCORING_CONFIG_INVALID");
+      }
+    }
   }
-  const bundle = JSON.parse(rule.rulesJson) as RuleBundle;
+  if (!bundle) throw new MorivaError("PATHWAY_UNAVAILABLE");
   const { match, safetyOverride } = evaluateRules(bundle, input);
 
   // attach eligible provider services per category (verified + active only)
@@ -122,8 +145,8 @@ export async function navigate(input: {
   }));
 
   return {
-    ruleVersion: rule.version,
-    rulesStatus: rule.status as "DEMO_APPROVED" | "APPROVED",
+    ruleVersion,
+    rulesStatus,
     options,
     requiresHumanReview: safetyOverride,
     safetyOverride,

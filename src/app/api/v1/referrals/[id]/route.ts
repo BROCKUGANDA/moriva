@@ -1,4 +1,4 @@
-import { withApi, jsonOk } from "@/lib/api";
+import { withApi, jsonOk, requireIdempotencyKey, readJsonSafe } from "@/lib/api";
 import { z } from "zod";
 import { requireUser } from "@/domains/identity/service";
 import { getOwnedReferral, transitionReferral } from "@/domains/referrals/service";
@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { MorivaError } from "@/lib/errors";
 
 /** Referral detail for its owner — includes the full event timeline with evidence sources. */
-export const GET = withApi({ rate: "read" })(async ({ params }) => {
+export const GET = withApi({ rate: "read" })(async ({ params, requestId }) => {
   const user = await requireUser();
   const r = await db.referral.findUnique({
     where: { id: params.id },
@@ -54,17 +54,17 @@ export const GET = withApi({ rate: "read" })(async ({ params }) => {
           occurredAt: e.occurredAt,
         })),
       },
-    },
-    ""
+    }, requestId
   );
 });
 
 const CancelBody = z.object({ action: z.literal("cancel") });
 
 /** User-initiated cancel (CANCELLED_BY_USER). */
-export const PATCH = withApi({ rate: "write", csrf: true })(async ({ req, params }) => {
+export const PATCH = withApi({ rate: "write", csrf: true })(async ({ req, params, requestId }) => {
   const user = await requireUser();
-  const parsed = CancelBody.safeParse(await req.json().catch(() => null));
+  requireIdempotencyKey(req);
+  const parsed = CancelBody.safeParse(await readJsonSafe(req));
   if (!parsed.success) throw new MorivaError("VALIDATION_FAILED");
   const r = await getOwnedReferral(user.id, params.id);
   const outcome = await transitionReferral({
@@ -73,5 +73,5 @@ export const PATCH = withApi({ rate: "write", csrf: true })(async ({ req, params
     actor: { userId: user.id, role: user.role },
     expectedVersion: r.version,
   });
-  return jsonOk({ state: outcome.to, version: outcome.referral.version }, "");
+  return jsonOk({ state: outcome.to, version: outcome.referral.version }, requestId);
 });

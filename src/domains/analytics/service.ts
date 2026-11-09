@@ -4,6 +4,7 @@
  * Unknown is never converted into success. Small cells are suppressed.
  */
 import { db } from "@/lib/db";
+import { getEnv } from "@/lib/env";
 
 export type Metric = {
   key: string;
@@ -22,7 +23,8 @@ function isSuppressed(n: number, threshold: number): boolean {
   return n > 0 && n < threshold;
 }
 
-export async function outcomesDashboard(smallCellThreshold = 5, periodDays = 30): Promise<{ metrics: Metric[]; labels: { simulatedData: boolean; note: string } }> {
+export async function outcomesDashboard(smallCellThreshold?: number, periodDays = 30): Promise<{ metrics: Metric[]; labels: { simulatedData: boolean; note: string } }> {
+  const threshold = smallCellThreshold ?? getEnv().smallCellThreshold;
   const periodEnd = new Date();
   const periodStart = new Date(periodEnd.getTime() - periodDays * 24 * 3600_000);
 
@@ -52,7 +54,7 @@ export async function outcomesDashboard(smallCellThreshold = 5, periodDays = 30)
       definition: "Assessment sessions scored / assessment sessions started",
       numerator: assessmentsScored,
       denominator: assessmentsStarted,
-      suppressed: isSuppressed(assessmentsScored, smallCellThreshold) || isSuppressed(assessmentsStarted, smallCellThreshold),
+      suppressed: isSuppressed(assessmentsScored, threshold) || isSuppressed(assessmentsStarted, threshold),
       periodStart: periodStart.toISOString(),
       periodEnd: periodEnd.toISOString(),
       sources: ["SYSTEM"],
@@ -64,7 +66,7 @@ export async function outcomesDashboard(smallCellThreshold = 5, periodDays = 30)
       definition: "Referrals created / assessments scored",
       numerator: referralsCreated,
       denominator: assessmentsScored,
-      suppressed: isSuppressed(referralsCreated, smallCellThreshold) || isSuppressed(assessmentsScored, smallCellThreshold),
+      suppressed: isSuppressed(referralsCreated, threshold) || isSuppressed(assessmentsScored, threshold),
       periodStart: periodStart.toISOString(),
       periodEnd: periodEnd.toISOString(),
       sources: ["SYSTEM"],
@@ -76,7 +78,7 @@ export async function outcomesDashboard(smallCellThreshold = 5, periodDays = 30)
       definition: "Referrals acknowledged / referrals created",
       numerator: referralsAcknowledged,
       denominator: referralsCreated,
-      suppressed: isSuppressed(referralsAcknowledged, smallCellThreshold),
+      suppressed: isSuppressed(referralsAcknowledged, threshold),
       periodStart: periodStart.toISOString(),
       periodEnd: periodEnd.toISOString(),
       sources: ["SIMULATED"],
@@ -88,7 +90,7 @@ export async function outcomesDashboard(smallCellThreshold = 5, periodDays = 30)
       definition: "Appointments scheduled / referrals created",
       numerator: appointmentsScheduled,
       denominator: referralsCreated,
-      suppressed: isSuppressed(appointmentsScheduled, smallCellThreshold),
+      suppressed: isSuppressed(appointmentsScheduled, threshold),
       periodStart: periodStart.toISOString(),
       periodEnd: periodEnd.toISOString(),
       sources: ["SIMULATED"],
@@ -100,7 +102,7 @@ export async function outcomesDashboard(smallCellThreshold = 5, periodDays = 30)
       definition: "Referrals with a confirmed contact or completed follow-up / referrals created",
       numerator: confirmedFollowUps,
       denominator: referralsCreated,
-      suppressed: isSuppressed(confirmedFollowUps, smallCellThreshold) || isSuppressed(referralsCreated, smallCellThreshold),
+      suppressed: isSuppressed(confirmedFollowUps, threshold) || isSuppressed(referralsCreated, threshold),
       periodStart: periodStart.toISOString(),
       periodEnd: periodEnd.toISOString(),
       sources: ["PATIENT_REPORTED", "SIMULATED"],

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function ProfessionalInboxPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  const rows = await listAssignedReferrals(user.id);
+  const { items: rows } = await listAssignedReferrals(user.id, { limit: 50 });
 
   const byState = (s: string) => {
     if (s === "PENDING_PROVIDER_ACKNOWLEDGEMENT") return "new";

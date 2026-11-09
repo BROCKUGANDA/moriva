@@ -5,14 +5,19 @@ import { db } from "@/lib/db";
 import { MorivaError } from "@/lib/errors";
 
 /** Result explanation with limitations (non-diagnostic, versioned) — PRD §7.4. */
-export const GET = withApi({ rate: "read" })(async ({ params }) => {
+export const GET = withApi({ rate: "read" })(async ({ params, requestId }) => {
   const user = await requireUser();
   const session = await getOwnedSession(user.id, params.id);
   if (!session.result) throw new MorivaError("ASSESSMENT_INCOMPLETE", { messageOverride: "There isn't a result for this session yet." });
-  const bands = JSON.parse(session.instrumentVersion.interpretationEn || "[]") as Array<{ code: string; titleEn: string; bodyEn: string }>;
+  let bands: Array<{ code: string; titleEn: string; bodyEn: string }>; 
+  try {
+    bands = JSON.parse(session.instrumentVersion.interpretationEn || "[]");
+  } catch {
+    throw new MorivaError("SCORING_CONFIG_INVALID");
+  }
   const band = bands.find((b) => b.code === session.result!.interpretationCode) ?? null;
   // content blocks for limitations (from content_items, fallback inline)
-  const blocks = await db.contentItem.findMany({ where: { contentType: "RESULT_BLOCK", status: "REVIEWED", locale: "en" } });
+  const blocks = await db.contentItem.findMany({ where: { contentType: "RESULT_BLOCK", status: "REVIEWED", locale: "en" }, take: 20, orderBy: { version: "desc" } });
   return jsonOk(
     {
       result: {
@@ -38,7 +43,6 @@ export const GET = withApi({ rate: "read" })(async ({ params }) => {
       limitations: session.instrumentVersion.limitationsEn,
       contentBlocks: blocks.map((b) => ({ title: b.title, body: b.body, sourceRef: b.sourceRef })),
       completedAt: session.completedAt,
-    },
-    ""
+    }, requestId
   );
 });

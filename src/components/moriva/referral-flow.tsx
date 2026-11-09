@@ -78,9 +78,10 @@ export function ReferralFlow({
     setBusy(true);
     try {
       // 1. capture consent for this named recipient (PRD §11.2 — recipient-specific consent)
+      const consentKey = `consent-${idempotencyKey}`;
       const consentRes = await fetch("/api/v1/me/consents", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": consentKey },
         body: JSON.stringify({ purpose: "REFERRAL", dataCategories: preview.dataCategories, recipientType: "PROVIDER", recipientId: preview.recipient.providerId }),
       });
       const consentBody = await consentRes.json().catch(() => null);
@@ -107,6 +108,15 @@ export function ReferralFlow({
         return;
       }
       if (!res.ok) {
+        if (res.status === 409 && body?.code === "REQUEST_IDEMPOTENCY_CONFLICT") {
+          setError("This referral was already sent with different details. Start a new referral to change what is shared.");
+          return;
+        }
+        if (body?.duplicate || body?.referral) {
+          setResult(body.referral);
+          setStep("done");
+          return;
+        }
         setError(body?.message ?? "The referral could not be created. Nothing was shared.");
         return;
       }
@@ -198,6 +208,7 @@ export function ReferralFlow({
             />
             <Label htmlFor={`field-${f.code}`} className="cursor-pointer text-sm font-medium leading-snug">
               {f.label}
+              {f.code === "REFERRAL_REASON" && <span className="ml-1 text-xs font-semibold text-moriva-teal">Required — cannot be deselected</span>}
               <span className="block text-xs font-normal text-moriva-slate">{f.desc}</span>
             </Label>
           </div>

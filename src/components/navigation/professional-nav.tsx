@@ -38,6 +38,21 @@ export function ProfessionalNav({ displayName }: { displayName: string }) {
             </Link>
           ))}
         </nav>
+        <nav aria-label="Professional (mobile)" className="flex items-center gap-1 overflow-x-auto md:hidden">
+          {links.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              aria-current={pathname === l.href ? "page" : undefined}
+              className={cn(
+                "whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium",
+                pathname === l.href ? "bg-secondary text-moriva-teal" : "text-moriva-slate hover:bg-secondary hover:text-moriva-ink"
+              )}
+            >
+              {l.label}
+            </Link>
+          ))}
+        </nav>
         <div className="flex items-center gap-2">
           <span className="hidden text-sm text-moriva-slate md:inline">{displayName}</span>
           <SignOutButton label="Sign out" />

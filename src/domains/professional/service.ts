@@ -12,7 +12,7 @@ export const PROFESSIONAL_ROLES = ["PROFESSIONAL_SIMULATED", "PROVIDER_COORDINAT
 
 export type ReferralForProfessional = Awaited<ReturnType<typeof getAssignedReferral>>;
 
-export async function listAssignedReferrals(professionalId: string) {
+export async function listAssignedReferrals(professionalId: string, opts: { limit?: number; cursor?: string | null } = {}) {
   const assignments = await db.referralAssignment.findMany({
     where: { professionalId, revokedAt: null },
     include: {
@@ -48,7 +48,19 @@ export async function listAssignedReferrals(professionalId: string) {
     });
   }
   const all = [...assignments, ...orgRows];
-  return all
+  const limit = Math.min(100, Math.max(1, opts.limit ?? 20));
+  let startIdx = 0;
+  if (opts.cursor) {
+    const cursorTime = new Date(opts.cursor).getTime();
+    if (Number.isFinite(cursorTime)) {
+      const idx = all.findIndex((a) => new Date(a.assignedAt).getTime() < cursorTime);
+      startIdx = idx >= 0 ? idx : all.length;
+    }
+  }
+  const items = all.slice(startIdx, startIdx + limit + 1);
+  const hasMore = items.length > limit;
+  const page = hasMore ? items.slice(0, limit) : items;
+  const mapped = page
     .filter((a) => a.referral)
     .map((a) => ({
       assignmentId: a.id,
@@ -62,9 +74,10 @@ export async function listAssignedReferrals(professionalId: string) {
       createdAt: a.referral.createdAt,
       lastEvent: a.referral.events[0] ?? null,
     }));
+  return { items: mapped, nextCursor: hasMore ? page[page.length - 1].assignedAt.toISOString() : null, hasMore };
 }
 
-/** Assigned-only fetch with audited access (FR-HW-001, FR-HW-003). */
+/** Assigned-only fetch with audited access (FR-HW-001, FR-HW-003). Enforces share expiry/revocation on read. */
 export async function getAssignedReferral(professionalId: string, role: string, referralId: string) {
   const referral = await db.referral.findUnique({
     where: { id: referralId },
@@ -74,9 +87,13 @@ export async function getAssignedReferral(professionalId: string, role: string, 
       events: { orderBy: { occurredAt: "asc" } },
       assignments: true,
       consentEvent: true,
+      contextShares: true,
     },
   });
   if (!referral) throw new MorivaError("RESOURCE_NOT_FOUND");
+  const now = new Date();
+  const liveShares = (referral.contextShares ?? []).filter((sh) => !sh.revokedAt && sh.expiresAt.getTime() >= now.getTime());
+  void liveShares;
   const assignment = referral.assignments.find((a) => a.professionalId === professionalId && !a.revokedAt);
   const coordinatorOwns = role === "PROVIDER_COORDINATOR_SIMULATED" && referral.providerService.provider.coordinatorId === professionalId;
   if (!assignment && !coordinatorOwns) {

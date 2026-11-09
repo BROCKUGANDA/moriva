@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function HistoryPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  const sessions = await listUserSessions(user.id);
+  const { items: sessions } = await listUserSessions(user.id, { limit: 50 });
   const checkIns = await db.notification.findMany({ where: { userId: user.id, purpose: "CHECK_IN" }, orderBy: { sentAt: "desc" }, take: 20 });
 
   return (
@@ -31,7 +31,7 @@ export default async function HistoryPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusBadge tone={s.status === "SCORED" ? "success" : "neutral"}>{s.status}</StatusBadge>
-                  {s.status === "SCORED" && <Link href={`/app/assessments/${s.id}/result`} className="text-sm font-semibold text-moriva-teal underline-offset-4 hover:underline">Result</Link>}
+                  {s.status === "IN_PROGRESS" ? <Link href={`/app/assessments/${s.id}`} className="text-sm font-semibold text-moriva-teal underline-offset-4 hover:underline">Resume</Link> : s.status === "SCORED" ? <Link href={`/app/assessments/${s.id}/result`} className="text-sm font-semibold text-moriva-teal underline-offset-4 hover:underline">Result</Link> : null}
                 </div>
               </li>
             ))}

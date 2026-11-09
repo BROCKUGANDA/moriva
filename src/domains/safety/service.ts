@@ -5,6 +5,7 @@
  * from the build pack reference register). Never invent replacement numbers.
  */
 import { db } from "@/lib/db";
+import { MorivaError } from "@/lib/errors";
 import { log } from "@/lib/logging";
 
 export type SafetyContact = {
@@ -121,18 +122,40 @@ export async function recordSafetyEvent(input: {
   sourceType: "HELP_NOW_SELECTION" | "ASSESSMENT_RISK_ITEM" | "STAFF_ACTIVATION";
   triggerCode: string;
   regionCode: string;
+  sessionId?: string | null;
+  itemId?: string | null;
 }) {
   const active = await db.safetyResourceConfig
     .findFirst({ where: { regionCode: input.regionCode, contactPurpose: "EMERGENCY", status: "ACTIVE" }, orderBy: { version: "desc" } })
     .catch(() => null);
-  return db.safetyEvent.create({
-    data: {
-      subjectUserId: input.subjectUserId,
-      sourceType: input.sourceType,
-      triggerCode: input.triggerCode,
-      configVersion: active?.version ?? 1,
-      regionCode: input.regionCode,
-      eventStatus: "OPEN",
-    },
-  });
+  const sessionId = input.sessionId ?? null;
+  const itemId = input.itemId ?? null;
+  if (sessionId && itemId) {
+    const prior = await db.safetyEvent.findUnique({
+      where: { sessionId_itemId_triggerCode: { sessionId, itemId, triggerCode: input.triggerCode } },
+    }).catch(() => null);
+    if (prior) return prior;
+  }
+  try {
+    return await db.safetyEvent.create({
+      data: {
+        subjectUserId: input.subjectUserId,
+        sourceType: input.sourceType,
+        triggerCode: input.triggerCode,
+        configVersion: active?.version ?? 1,
+        regionCode: input.regionCode,
+        eventStatus: "OPEN",
+        sessionId,
+        itemId,
+      },
+    });
+  } catch {
+    if (sessionId && itemId) {
+      const raced = await db.safetyEvent.findUnique({
+        where: { sessionId_itemId_triggerCode: { sessionId, itemId, triggerCode: input.triggerCode } },
+      }).catch(() => null);
+      if (raced) return raced;
+    }
+    throw new MorivaError("DEPENDENCY_UNAVAILABLE");
+  }
 }

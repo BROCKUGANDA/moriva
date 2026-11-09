@@ -30,7 +30,6 @@ export function HelpNowClient({ regionCode, isAuthed }: { regionCode: string; is
       )}
       <p className="mt-3 text-xs text-moriva-slate">
         {isAuthed ? "You can return to your MORIVA overview at any time — this page does not trap you." : "You can leave this page at any time."}
-        {regionCode ? "" : ""}
       </p>
     </section>
   );

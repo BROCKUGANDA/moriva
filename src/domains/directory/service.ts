@@ -8,6 +8,8 @@ import { MorivaError } from "@/lib/errors";
 const REFERRABLE_STATUSES = ["VERIFIED", "DEMO_VERIFIED_SIMULATED"];
 
 export async function searchProviders(filter: {
+  limit?: number;
+  cursor?: string | null;
   q?: string;
   careLevel?: string;
   language?: string;
@@ -17,16 +19,21 @@ export async function searchProviders(filter: {
   if (filter.careLevel) serviceWhere.careLevel = filter.careLevel;
   if (filter.language) serviceWhere.languages = { contains: filter.language };
 
+  const limit = Math.min(100, Math.max(1, filter.limit ?? 20));
   const providers = await db.provider.findMany({
-    where: filter.includeNonReferrable
-      ? {}
-      : { verificationStatus: { in: REFERRABLE_STATUSES } },
+    where: {
+      ...(filter.includeNonReferrable ? {} : { verificationStatus: { in: REFERRABLE_STATUSES } }),
+      ...(filter.cursor ? { displayName: { gt: filter.cursor } } : {}),
+    },
     include: { services: { where: filter.includeNonReferrable ? {} : { status: "ACTIVE" } } },
     orderBy: { displayName: "asc" },
+    take: limit + 1,
   });
+  const hasMore = providers.length > limit;
+  const pageProviders = hasMore ? providers.slice(0, limit) : providers;
 
   const q = filter.q?.trim().toLowerCase();
-  return providers
+  const mapped = pageProviders
     .map((p) => ({
       id: p.id,
       displayName: p.displayName,
@@ -56,6 +63,7 @@ export async function searchProviders(filter: {
         })),
     }))
     .filter((p) => p.services.length > 0);
+  return { items: mapped, nextCursor: hasMore ? pageProviders[pageProviders.length - 1].displayName : null, hasMore };
 }
 
 export async function getProvider(providerId: string) {
@@ -77,11 +85,12 @@ export async function assertReferrableService(providerServiceId: string) {
   const referrable =
     REFERRABLE_STATUSES.includes(service.provider.verificationStatus) &&
     service.status === "ACTIVE" &&
-    (!service.recheckDueAt || service.recheckDueAt.getTime() >= Date.now() || REFERRABLE_STATUSES.includes(service.provider.verificationStatus));
+    (!service.recheckDueAt || service.recheckDueAt.getTime() >= Date.now());
+  if (service.provider.verificationStatus === "EXPIRED" || (service.recheckDueAt && service.recheckDueAt.getTime() < Date.now())) {
+    throw new MorivaError("PROVIDER_SERVICE_EXPIRED");
+  }
   if (!referrable) {
-    throw new MorivaError(
-      service.provider.verificationStatus === "EXPIRED" ? "PROVIDER_SERVICE_EXPIRED" : "PROVIDER_UNVERIFIED"
-    );
+    throw new MorivaError("PROVIDER_UNVERIFIED");
   }
   return service;
 }

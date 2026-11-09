@@ -52,7 +52,7 @@ export async function reflect(input: ReflectionRequest): Promise<ReflectionRespo
   const safety = preCheckSafety(input.message);
 
   throw new MorivaError("AI_DISABLED", {
-    details: { safetyHint: safety.urgent ? "urgent-language-detected" : "none" },
+    details: { field: "safetyHint" },
     messageOverride: "The reflection assistant is unavailable in this prototype. Your assessment and support options are still available.",
   });
 }

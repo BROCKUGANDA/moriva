@@ -51,20 +51,13 @@ export function SupportOptionsAfterResult({ resultId }: { resultId?: string }) {
       })
       .then(setNav)
       .catch((e) => setError(e.message));
-    fetch("/api/v1/support-options")
-      .then(() => {})
-      .catch(() => {});
-    // community/self-guided resources come from the directory search (public support resources)
-    fetch("/api/v1/providers")
-      .then((r) => r.json())
-      .catch(() => null);
   }, [resultId]);
 
-  // fetch support resources via a light endpoint (reuse providers list w/ resources is separate — use the public payload)
+  // community/self-guided resources come from the support-resources directory
   useEffect(() => {
     fetch("/api/v1/support-resources")
-      .then((r) => (r.ok ? r.json() : { resources: [] }))
-      .then((b) => setResources(b.resources ?? []))
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((b) => setResources(b.data ?? b.resources ?? []))
       .catch(() => {});
   }, []);
 
@@ -133,15 +126,26 @@ export function SupportOptionsAfterResult({ resultId }: { resultId?: string }) {
 }
 
 function ProvidersForOption({ ids }: { ids: string[] }) {
-  const [providers, setProviders] = useState<Array<{ id: string; serviceName: string; providerDisplayName: string; location: string; simulated: boolean }>>([]);
+  const [providers, setProviders] = useState<Array<{ id: string; serviceName: string; providerDisplayName: string; location: string; simulated: boolean }> | null>(null);
+  const key = ids.join(",");
   useEffect(() => {
     if (ids.length === 0) return;
-    Promise.all(ids.map((id) => fetch(`/api/v1/provider-services/${id}`).then((r) => (r.ok ? r.json() : null))))
-      .then((rows) => setProviders(rows.filter(Boolean).map((r: { service: { id: string; serviceName: string; providerDisplayName: string; location: string; simulated: boolean } }) => r.service)))
-      .catch(() => {});
-  }, [ids.join(",")]);
+    let cancelled = false;
+    Promise.all(ids.map((id) => fetch(`/api/v1/provider-services/${encodeURIComponent(id)}`).then((r) => (r.ok ? r.json() : null))))
+      .then((rows) => {
+        if (!cancelled) setProviders(rows.filter(Boolean).map((r: { service: { id: string; serviceName: string; providerDisplayName: string; location: string; simulated: boolean } }) => r.service));
+      })
+      .catch(() => {
+        if (!cancelled) setProviders([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
   if (ids.length === 0) return <p className="text-xs text-moriva-slate">No matching verified services to list right now.</p>;
-  if (providers.length === 0) return <div className="h-10 w-full animate-pulse rounded bg-muted" aria-busy="true" />;
+  if (providers === null) return <div className="h-10 w-full animate-pulse rounded bg-muted" aria-busy="true" />;
+  if (providers.length === 0) return <p className="text-xs text-moriva-slate">Services are being re-verified — check back shortly or browse all providers.</p>;
   return (
     <ul className="space-y-2">
       {providers.map((p) => (

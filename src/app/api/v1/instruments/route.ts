@@ -2,10 +2,10 @@ import { withApi, jsonOk } from "@/lib/api";
 import { requireUser } from "@/domains/identity/service";
 import { getActiveInstrument } from "@/domains/assessment/service";
 
-export const GET = withApi({ rate: "read" })(async () => {
+export const GET = withApi({ rate: "read" })(async ({ requestId }) => {
   await requireUser();
   const active = await getActiveInstrument();
-  if (!active) return jsonOk({ instruments: [] }, "");
+  if (!active) return jsonOk({ instruments: [] }, requestId);
   return jsonOk(
     {
       instruments: [
@@ -33,7 +33,6 @@ export const GET = withApi({ rate: "read" })(async () => {
           },
         },
       ],
-    },
-    ""
+    }, requestId
   );
 });

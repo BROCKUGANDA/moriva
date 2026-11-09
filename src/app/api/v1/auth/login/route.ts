@@ -11,7 +11,7 @@ const Body = z.object({
   roleHint: z.enum(["INDIVIDUAL", "PROFESSIONAL", "OPS"]).optional(), // selects which demo surface; server verifies actual role
 });
 
-export const POST = withApi({ rate: "auth", csrf: false })(async ({ req, ip }) => {
+export const POST = withApi({ rate: "auth", csrf: false })(async ({ req, ip, requestId }) => {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) throw new MorivaError("VALIDATION_FAILED");
   const { email, password } = parsed.data;
@@ -41,7 +41,6 @@ export const POST = withApi({ rate: "auth", csrf: false })(async ({ req, ip }) =
     action: "AUTH_LOGIN", resourceType: "user", resourceId: user.id, outcome: "ALLOW", ipHash: hashIp(ip),
   });
   return jsonOk(
-    { user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, demoData: user.demoData } },
-    "", 200
+    { user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, demoData: user.demoData } }, requestId, 200
   );
 });

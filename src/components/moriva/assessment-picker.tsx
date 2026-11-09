@@ -5,8 +5,17 @@ import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/moriva/status";
 
 /** Optional: pick which (already completed) assessment result to include in the referral. */
-export function AssessmentPicker({ sessions }: { sessions: Array<{ id: string; name: string; version: string; code: string; completedAt: string }> }) {
-  const [selected, setSelected] = useState<string>("");
+export function AssessmentPicker({
+  sessions,
+  value,
+  onSelect,
+}: {
+  sessions: Array<{ id: string; name: string; version: string; code: string; completedAt: string }>;
+  value?: string | null;
+  onSelect?: (resultId: string | null) => void;
+}) {
+  const [internal, setInternal] = useState<string>("");
+  const selected = value !== undefined ? value ?? "" : internal;
   if (sessions.length === 0) return null;
   return (
     <div className="mt-3 rounded-2xl border border-moriva-line bg-white p-4">
@@ -15,8 +24,9 @@ export function AssessmentPicker({ sessions }: { sessions: Array<{ id: string; n
         id="result-select"
         value={selected}
         onChange={(e) => {
-          setSelected(e.target.value);
-          window.dispatchEvent(new CustomEvent("moriva:result-selected", { detail: e.target.value || null }));
+          const v = e.target.value || null;
+          if (value === undefined) setInternal(e.target.value);
+          onSelect?.(v);
         }}
         className="mt-1 min-h-11 w-full rounded-lg border border-moriva-line bg-white px-3 text-sm"
       >

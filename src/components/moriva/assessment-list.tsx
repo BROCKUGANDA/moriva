@@ -40,10 +40,13 @@ export function AssessmentList() {
       fetch("/api/v1/instruments").then((r) => r.json()),
     ])
       .then(([s, i]) => {
-        setSessions(s.sessions ?? []);
+        setSessions(s.data ?? s.sessions ?? []);
         setInstruments(i.instruments ?? []);
       })
-      .catch(() => setSessions([]));
+      .catch(() => {
+        setSessions([]);
+        setInstruments([]);
+      });
   }, []);
 
   async function start() {
@@ -51,7 +54,7 @@ export function AssessmentList() {
     setStartError(null);
     const csrf = document.cookie.split("; ").find((c) => c.startsWith("moriva_csrf="))?.split("=")[1] ?? "";
     try {
-      const res = await fetch("/api/v1/assessment-sessions", { method: "POST", headers: { "x-csrf-token": csrf } });
+      const res = await fetch("/api/v1/assessment-sessions", { method: "POST", headers: { "x-csrf-token": csrf, "Idempotency-Key": `session-${Date.now()}` } });
       const body = await res.json().catch(() => null);
       if (res.ok) window.location.href = `/app/assessments/${body.sessionId}`;
       else setStartError(body?.message ?? "Could not start the assessment.");

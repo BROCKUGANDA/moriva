@@ -11,7 +11,7 @@ const Body = z.object({
   displayName: z.string().min(2).max(80),
 });
 
-export const POST = withApi({ rate: "auth", csrf: false })(async ({ req, ip }) => {
+export const POST = withApi({ rate: "auth", csrf: false })(async ({ req, ip, requestId }) => {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     throw new MorivaError("VALIDATION_FAILED", { details: { field: parsed.error.issues[0]?.path?.[0]?.toString() ?? "body" } });
@@ -23,5 +23,5 @@ export const POST = withApi({ rate: "auth", csrf: false })(async ({ req, ip }) =
     actorId: user.id, actorRole: user.role, subjectId: user.id,
     action: "AUTH_REGISTER", resourceType: "user", resourceId: user.id, outcome: "ALLOW", ipHash: hashIp(ip),
   });
-  return jsonOk({ user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, demoData: user.demoData } }, "", 201);
+  return jsonOk({ user: { id: user.id, email: user.email, displayName: user.displayName, role: user.role, demoData: user.demoData } }, requestId, 201);
 });

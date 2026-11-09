@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/domains/identity/service";
 import { db } from "@/lib/db";
@@ -40,6 +41,7 @@ export default async function FollowUpsPage() {
               <div className="flex items-center gap-2">
                 <StatusBadge tone={f.status === "COMPLETED" ? "success" : overdue.includes(f) ? "warning" : "teal"}>{f.status.toLowerCase()}</StatusBadge>
                 <StatusBadge tone="neutral">{f.evidenceSource.toLowerCase().replace(/_/g, " ")}</StatusBadge>
+                <Link href={`/professional/referrals/${f.referralId}`} className="min-h-11 rounded-lg border border-moriva-teal px-3 py-2 text-xs font-semibold text-moriva-teal hover:bg-secondary">Open</Link>
               </div>
             </li>
           ))}

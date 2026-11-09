@@ -92,13 +92,14 @@ export async function requireConsent(input: ConsentCheck): Promise<string> {
       : decision.reason === "EXPIRED" ? "CONSENT_EXPIRED"
       : "CONSENT_REQUIRED";
     throw new MorivaError(code, {
-      details: { purpose: input.purpose },
+      details: { field: "purpose" },
     });
   }
   return decision.consentEventId!;
 }
 
 /** Grant a purpose (never pre-checked; explicit action only). */
+const ALLOWED_DATA_CATEGORIES = ["CONTACT_DETAILS", "REFERRAL_REASON", "ASSESSMENT_SUMMARY", "HEALTH_CONTEXT", "JOURNAL", "NOTIFICATIONS"];
 export async function grantConsent(input: {
   subjectId: string; actorId?: string;
   purpose: PurposeCode; recipientType?: RecipientType; recipientId?: string | null;
@@ -108,9 +109,15 @@ export async function grantConsent(input: {
     where: { code: input.purpose, retiredAt: null },
     orderBy: { version: "desc" },
   });
-  if (!purposeDef) throw new MorivaError("VALIDATION_FAILED", { details: { purpose: input.purpose } });
-  const grantedAt = new Date();
+  if (!purposeDef) throw new MorivaError("VALIDATION_FAILED", { details: { field: "purpose" } });
   const dataCategories = input.dataCategories ?? [];
+  if (dataCategories.some((c) => !ALLOWED_DATA_CATEGORIES.includes(c))) {
+    throw new MorivaError("VALIDATION_FAILED", { details: { field: "dataCategories" } });
+  }
+  if (input.expiresAt && input.expiresAt.getTime() <= Date.now()) {
+    throw new MorivaError("VALIDATION_FAILED", { details: { field: "expiresAt" }, messageOverride: "Expiry must be a future date." });
+  }
+  const grantedAt = new Date();
   const proof = consentProofHash({
     subjectId: input.subjectId,
     purpose: input.purpose,
@@ -137,7 +144,7 @@ export async function grantConsent(input: {
   });
 }
 
-/** Revoke: blocks every future disclosure under this purpose (+optional recipient). */
+/** Revoke: blocks every future disclosure under this purpose (+optional recipient). Cascades to health-context shares. */
 export async function revokeConsent(input: {
   subjectId: string; actorId?: string;
   purpose: PurposeCode; recipientId?: string | null;
@@ -148,16 +155,23 @@ export async function revokeConsent(input: {
     status: "GRANTED",
     ...(input.recipientId ? { recipientId: input.recipientId } : {}),
   };
-  const result = await db.consentEvent.updateMany({ where, data: { status: "REVOKED", revokedAt: new Date() } });
+  const now = new Date();
+  const result = await db.consentEvent.updateMany({ where, data: { status: "REVOKED", revokedAt: now } });
+  if (result.count > 0) {
+    await db.healthContextShare.updateMany({
+      where: { userId: input.subjectId, revokedAt: null, expiresAt: { gt: now } },
+      data: { revokedAt: now },
+    }).catch(() => null);
+  }
   return result.count;
 }
 
 /** Current consent ledger rows for the privacy centre. */
-export async function listConsents(subjectId: string) {
+export async function listConsents(subjectId: string, limit = 100) {
   const rows = await db.consentEvent.findMany({
     where: { subjectUserId: subjectId },
     orderBy: { grantedAt: "desc" },
-    take: 100,
+    take: Math.min(100, Math.max(1, limit)),
   });
   // group to latest per (purpose, recipient)
   const seen = new Map<string, (typeof rows)[number]>();

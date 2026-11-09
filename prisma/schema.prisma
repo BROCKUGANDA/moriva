@@ -179,6 +179,7 @@ model AssessmentSession {
   locale              String               @default("en")
   scoringVersion      String
   source              String               @default("WEB")
+  idempotencyKey      String?              @unique // double-submit protection for createSession
   startedAt           DateTime             @default(now())
   completedAt         DateTime?
   updatedAt           DateTime             @updatedAt
@@ -244,7 +245,10 @@ model SafetyEvent {
   regionCode    String
   createdAt     DateTime  @default(now())
   closedAt      DateTime?
+  sessionId     String? // assessment session that triggered this event (dedup per session+item)
+  itemId        String? // item key that triggered (dedup per session+item)
 
+  @@unique([sessionId, itemId, triggerCode])
   @@index([subjectUserId])
   @@index([createdAt])
 }
@@ -359,6 +363,7 @@ model Referral {
   contextShares      HealthContextShare[]
   followUps          FollowUp[]
 
+  @@unique([userId, providerServiceId, requestHash]) // business dedup: same user+service+payload
   @@index([userId, state])
   @@index([state, updatedAt])
 }
@@ -407,6 +412,7 @@ model FollowUp {
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
 
+  @@unique([referralId, status]) // one active DUE per referral; COMPLETED via update not new row
   @@index([referralId])
 }
 
@@ -487,6 +493,8 @@ model OutboxEvent {
   aggregateType   String
   aggregateId     String
   eventType       String
+  dedupKey        String?   @unique // idempotency for dispatch: aggregate+event+version
+  claimedAt       DateTime? // atomic claim for dispatcher (UPDATE WHERE status=PENDING)
   payloadRedacted String    @default("{}")
   attempts        Int       @default(0)
   lastError       String?

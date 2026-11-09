@@ -14,6 +14,14 @@ export const SESSION_COOKIE = "moriva_session";
 export const CSRF_COOKIE = "moriva_csrf";
 export const SESSION_TTL_HOURS = 8;
 
+export function sessionTtlHours(): number {
+  try {
+    return getEnv().sessionTtlHours;
+  } catch {
+    return SESSION_TTL_HOURS;
+  }
+}
+
 export type SessionUser = {
   id: string;
   email: string;
@@ -56,7 +64,7 @@ export async function authenticate(email: string, password: string) {
 export async function createSession(userId: string, meta: { ip?: string | null; userAgent?: string | null }) {
   const token = randomToken(32);
   const csrfToken = randomToken(24);
-  const expiresAt = new Date(Date.now() + SESSION_TTL_HOURS * 3600_000);
+  const expiresAt = new Date(Date.now() + sessionTtlHours() * 3600_000);
   const session = await db.session.create({
     data: {
       userId,
@@ -72,12 +80,13 @@ export async function createSession(userId: string, meta: { ip?: string | null; 
 
 export function sessionCookieOptions() {
   const isProd = getEnv().nodeEnv === "production";
+  const ttl = sessionTtlHours();
   return {
     httpOnly: true as const,
     sameSite: "lax" as const,
     secure: isProd,
     path: "/",
-    maxAge: SESSION_TTL_HOURS * 3600,
+    maxAge: ttl * 3600,
   };
 }
 

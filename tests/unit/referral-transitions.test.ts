@@ -29,7 +29,9 @@ describe("referral transition map", () => {
   it("forbids PENDING → FOLLOW_UP_COMPLETED without evidence (PRD §14.2)", () => {
     expect(canTransition("PENDING_PROVIDER_ACKNOWLEDGEMENT", "FOLLOW_UP_COMPLETED")).toBe(false);
     expect(canTransition("ACKNOWLEDGED", "FOLLOW_UP_COMPLETED")).toBe(false);
-    expect(canTransition("CONTACT_CONFIRMED", "FOLLOW_UP_COMPLETED")).toBe(false); // must pass through FOLLOW_UP_DUE
+    // CONTACT_CONFIRMED may complete directly (user-reported completion) or via FOLLOW_UP_DUE
+    expect(canTransition("CONTACT_CONFIRMED", "FOLLOW_UP_COMPLETED")).toBe(true);
+    expect(canTransition("CONTACT_CONFIRMED", "FOLLOW_UP_DUE")).toBe(true);
   });
 
   it("forbids skipping the consent gate", () => {

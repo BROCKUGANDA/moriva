@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/domains/identity/service";
 import { OpsNav } from "@/components/navigation/ops-nav";
+import { DemoBanner } from "@/components/moriva/status";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export default async function OpsLayout({ children }: { children: React.ReactNod
   }
   return (
     <div className="flex min-h-screen flex-col bg-[#F3F6F4]">
+      <DemoBanner />
       <OpsNav displayName={user.displayName} />
       <main id="main-content" className="moriva-container flex-1 py-6">{children}</main>
       <footer className="border-t border-moriva-line bg-white py-4 text-center text-xs text-moriva-slate">

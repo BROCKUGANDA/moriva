@@ -1,4 +1,4 @@
-import { withApi, jsonOk } from "@/lib/api";
+import { withApi, jsonOk, requireIdempotencyKey, readJsonSafe } from "@/lib/api";
 import { z } from "zod";
 import { requireUser } from "@/domains/identity/service";
 import { transitionReferral, REFERRAL_STATES } from "@/domains/referrals/service";
@@ -14,9 +14,10 @@ const Body = z.object({
 });
 
 /** Versioned transition endpoint (PRD §16.6). Rejects stale updates with REFERRAL_STATE_CONFLICT. */
-export const POST = withApi({ rate: "write", csrf: true })(async ({ req, params }) => {
+export const POST = withApi({ rate: "write", csrf: true })(async ({ req, params, requestId }) => {
   const user = await requireUser();
-  const parsed = Body.safeParse(await req.json().catch(() => null));
+  requireIdempotencyKey(req);
+  const parsed = Body.safeParse(await readJsonSafe(req));
   if (!parsed.success) throw new MorivaError("VALIDATION_FAILED", { details: { field: parsed.error.issues[0]?.path?.[0]?.toString() } });
   const outcome = await transitionReferral({
     referralId: params.id,
@@ -28,5 +29,5 @@ export const POST = withApi({ rate: "write", csrf: true })(async ({ req, params 
     noteBody: parsed.data.noteBody,
     safeReasonCode: parsed.data.safeReasonCode,
   });
-  return jsonOk({ state: outcome.to, version: outcome.referral.version }, "");
+  return jsonOk({ state: outcome.to, version: outcome.referral.version }, requestId);
 });

@@ -3,12 +3,19 @@
  * Client-facing messages never contain stack traces, SQL, vendor bodies, internal IDs
  * or clinical interpretation.
  */
+export type ApiProblemDetails =
+  | { field: string }
+  | { fields: string[] }
+  | { missing: string[] }
+  | { expected: number; actual: number }
+  | { from: string; to: string };
+
 export type ApiProblem = {
   code: string;
   message: string;
   requestId: string;
   retryable: boolean;
-  details?: Record<string, string | number | boolean>;
+  details?: ApiProblemDetails & Record<string, string | number | boolean | string[]>;
 };
 
 export const ERROR_CODES = {
@@ -35,6 +42,9 @@ export const ERROR_CODES = {
   AI_SAFETY_BLOCK: { http: 200, retryable: false, message: "Urgent support guidance is being shown now." },
   RATE_LIMITED: { http: 429, retryable: true, message: "Too many requests. Please try again in a moment." },
   VALIDATION_FAILED: { http: 422, retryable: true, message: "Please check the highlighted fields and try again." },
+  METHOD_NOT_ALLOWED: { http: 405, retryable: false, message: "This action is not supported here." },
+  PAYLOAD_TOO_LARGE: { http: 413, retryable: false, message: "This entry is too large. Try a shorter version." },
+  UNSUPPORTED_MEDIA_TYPE: { http: 415, retryable: false, message: "Request must be JSON." },
   RESOURCE_NOT_FOUND: { http: 404, retryable: false, message: "We couldn't find that page or record." },
   REQUEST_IDEMPOTENCY_CONFLICT: { http: 409, retryable: false, message: "This request key was already used with different content." },
   DEPENDENCY_UNAVAILABLE: { http: 503, retryable: true, message: "A service is temporarily unavailable. Please try again shortly." },
@@ -46,7 +56,7 @@ export type ErrorCode = keyof typeof ERROR_CODES;
 export class MorivaError extends Error {
   constructor(
     public code: ErrorCode,
-    public opts: { details?: Record<string, string | number | boolean>; httpOverride?: number; messageOverride?: string } = {}
+    public opts: { details?: ApiProblem["details"]; httpOverride?: number; messageOverride?: string; cause?: unknown } = {}
   ) {
     super(opts.messageOverride ?? ERROR_CODES[code].message);
     this.name = "MorivaError";
@@ -72,6 +82,19 @@ export function toApiProblem(err: unknown, requestId: string): { status: number;
       },
     };
   }
+  const code = prismaErrorCode(err);
+  if (code === "P2002") {
+    return {
+      status: 409,
+      body: { code: "REFERRAL_DUPLICATE", message: ERROR_CODES.REFERRAL_DUPLICATE.message, requestId, retryable: false },
+    };
+  }
+  if (code === "P2025") {
+    return {
+      status: 409,
+      body: { code: "REFERRAL_STATE_CONFLICT", message: ERROR_CODES.REFERRAL_STATE_CONFLICT.message, requestId, retryable: false },
+    };
+  }
   // Unknown errors: generic safe message; internals are logged, never returned.
   return {
     status: 500,
@@ -82,4 +105,10 @@ export function toApiProblem(err: unknown, requestId: string): { status: number;
       retryable: ERROR_CODES.INTERNAL_ERROR.retryable,
     },
   };
+}
+
+function prismaErrorCode(err: unknown): string | null {
+  if (!err || typeof err !== "object") return null;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" ? code : null;
 }

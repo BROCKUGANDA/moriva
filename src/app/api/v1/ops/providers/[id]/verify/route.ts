@@ -15,7 +15,7 @@ const Body = z.object({
  * POST — provider verification workflow. In this prototype only the DEMO simulation state
  * is meaningful; real verification requires a named human verifier (blocked, documented).
  */
-export const POST = withApi({ rate: "write", csrf: true })(async ({ req, params }) => {
+export const POST = withApi({ rate: "write", csrf: true })(async ({ req, params, requestId }) => {
   const user = await requireRole("OPS_ADMIN_SIMULATED");
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) throw new MorivaError("VALIDATION_FAILED");
@@ -45,5 +45,5 @@ export const POST = withApi({ rate: "write", csrf: true })(async ({ req, params 
     await db.providerService.updateMany({ where: { providerId: provider.id }, data: { status: "ACTIVE" } });
   }
   await audit({ actorId: user.id, actorRole: user.role, action: "PROVIDER_VERIFICATION_CHANGED", resourceType: "provider", resourceId: provider.id, outcome: "ALLOW", metadata: { to: updated.verificationStatus } });
-  return jsonOk({ provider: { id: updated.id, verificationStatus: updated.verificationStatus, recheckDueAt: updated.recheckDueAt } }, "");
+  return jsonOk({ provider: { id: updated.id, verificationStatus: updated.verificationStatus, recheckDueAt: updated.recheckDueAt } }, requestId);
 });

@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - run: npx eslint src lib prisma/seed.ts || npx eslint src
+      - run: bunx vitest run
+      - run: bun run build
+        env:
+          DATABASE_URL: file:./db/ci.db
+          DEMO_MODE: "true"

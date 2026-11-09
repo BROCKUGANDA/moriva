@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 /**
  * Route-segment error boundary (PRD §15.4): safe copy, no stack traces, no data-loss claims.
  */
@@ -18,9 +20,9 @@ export default function RouteError({ error, reset }: { error: Error & { digest?:
           >
             Try again
           </button>
-          <a href="/app" className="min-h-11 rounded-lg border border-moriva-line px-4 py-2 text-sm font-semibold text-moriva-slate hover:bg-muted">
+          <Link href="/app" className="min-h-11 rounded-lg border border-moriva-line px-4 py-2 text-sm font-semibold text-moriva-slate hover:bg-muted">
             Go to my overview
-          </a>
+          </Link>
         </div>
       </div>
     </div>

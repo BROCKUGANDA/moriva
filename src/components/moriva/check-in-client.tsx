@@ -8,20 +8,27 @@ export function CheckInClient() {
   const { t } = useLocale();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const csrf = typeof document !== "undefined" ? document.cookie.split("; ").find((c) => c.startsWith("moriva_csrf="))?.split("=")[1] ?? "" : "";
 
   async function tag(v: number) {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch("/api/v1/check-ins", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrf, "Idempotency-Key": `checkin-${Date.now()}-${v}` },
         body: JSON.stringify({ mood: v }),
       });
       if (res.ok) {
         setDone(true);
         setTimeout(() => (window.location.href = "/app"), 800);
+      } else {
+        const body = await res.json().catch(() => null);
+        setError(body?.message ?? "Could not save your check-in. Please try again.");
       }
+    } catch {
+      setError("Could not save your check-in. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -51,6 +58,7 @@ export function CheckInClient() {
         ))}
       </div>
       {done && <p role="status" className="mt-3 text-sm font-semibold text-state-success">Noted. Taking you back to your overview…</p>}
+      {error && <p role="alert" className="mt-3 text-sm font-semibold text-state-critical">{error}</p>}
     </div>
   );
 }

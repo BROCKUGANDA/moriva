@@ -6,7 +6,7 @@ import { PROFESSIONAL_ROLES, getAssignedReferral, buildSharedSummary } from "@/d
  * GET — consent-scoped referral detail for the assigned professional.
  * Only shared/assigned data is returned; the shared summary is minimum-necessary.
  */
-export const GET = withApi({ rate: "read" })(async ({ params }) => {
+export const GET = withApi({ rate: "read" })(async ({ params, requestId }) => {
   const user = await requireRole(...PROFESSIONAL_ROLES);
   const referral = await getAssignedReferral(user.id, user.role, params.id);
   const summary = buildSharedSummary(referral);
@@ -35,7 +35,6 @@ export const GET = withApi({ rate: "read" })(async ({ params }) => {
           noteClass: e.noteClass, occurredAt: e.occurredAt,
         })),
       },
-    },
-    ""
+    }, requestId
   );
 });

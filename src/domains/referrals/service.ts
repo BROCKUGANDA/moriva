@@ -23,14 +23,13 @@ export const TRANSITIONS: Record<ReferralState, ReferralState[]> = {
   AWAITING_USER_CONSENT: ["READY_TO_SEND", "CANCELLED_BY_USER", "WITHDRAWN_CONSENT"],
   READY_TO_SEND: ["PENDING_PROVIDER_ACKNOWLEDGEMENT", "CANCELLED_BY_USER", "WITHDRAWN_CONSENT", "DELIVERY_FAILED"],
   PENDING_PROVIDER_ACKNOWLEDGEMENT: ["ACKNOWLEDGED", "NEEDS_INFORMATION", "DECLINED", "PROVIDER_UNAVAILABLE", "CANCELLED_BY_USER", "WITHDRAWN_CONSENT", "EXPIRED"],
-  NEEDS_INFORMATION: ["ACKNOWLEDGED", "DECLINED", "PROVIDER_UNAVAILABLE", "CANCELLED_BY_USER", "WITHDRAWN_CONSENT"],
+  NEEDS_INFORMATION: ["ACKNOWLEDGED", "DECLINED", "PROVIDER_UNAVAILABLE", "CANCELLED_BY_USER", "WITHDRAWN_CONSENT", "CLOSED"],
   ACKNOWLEDGED: ["APPOINTMENT_OFFERED", "APPOINTMENT_SCHEDULED", "NEEDS_INFORMATION", "DECLINED", "PROVIDER_UNAVAILABLE", "CLOSED"],
   APPOINTMENT_OFFERED: ["APPOINTMENT_SCHEDULED", "DECLINED", "CLOSED"],
   APPOINTMENT_SCHEDULED: ["CONTACT_CONFIRMED", "CLOSED"],
-  CONTACT_CONFIRMED: ["FOLLOW_UP_DUE", "CLOSED"],
+  CONTACT_CONFIRMED: ["FOLLOW_UP_DUE", "FOLLOW_UP_COMPLETED", "CLOSED"],
   FOLLOW_UP_DUE: ["FOLLOW_UP_COMPLETED", "CLOSED", "EXPIRED"],
   FOLLOW_UP_COMPLETED: ["CLOSED"],
-  NEEDS_INFORMATION_TO_CLOSED: [],
   DECLINED: ["CLOSED"],
   PROVIDER_UNAVAILABLE: ["CLOSED"],
   CLOSED: [],
@@ -71,6 +70,14 @@ export function referralRequestHash(input: {
 const DEFAULT_SHARED_FIELDS = ["FIRST_NAME", "REFERRAL_REASON", "ASSESSMENT_SUMMARY"];
 
 export async function createReferral(input: CreateReferralInput): Promise<{ referral: { id: string; state: ReferralState; version: number }; duplicate: boolean }> {
+  // 0. service-layer validation (routes validate too, but services must not trust callers)
+  const validFields = ["FIRST_NAME", "REFERRAL_REASON", "ASSESSMENT_SUMMARY", "CONTACT_DETAILS"];
+  if (!Array.isArray(input.sharedFields) || input.sharedFields.length === 0 || input.sharedFields.some((f) => !validFields.includes(f))) {
+    throw new MorivaError("VALIDATION_FAILED", { details: { field: "sharedFields" } });
+  }
+  if (!input.purposeSummary || input.purposeSummary.trim().length < 5 || input.purposeSummary.length > 300) {
+    throw new MorivaError("VALIDATION_FAILED", { details: { field: "purposeSummary" } });
+  }
   // 1. idempotency: same key → same-or-conflict (PRD §14.2, AC-PR-08)
   const existing = await db.referral.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
   const requestHash = referralRequestHash({
@@ -105,20 +112,23 @@ export async function createReferral(input: CreateReferralInput): Promise<{ refe
   });
 
   // 4. create atomically: referral + first event + audit + outbox
-  const referral = await db.$transaction(async (tx) => {
-    const created = await tx.referral.create({
-      data: {
-        userId: input.actor.userId,
-        providerServiceId: input.providerServiceId,
-        assessmentResultId: input.assessmentResultId ?? null,
-        state: "PENDING_PROVIDER_ACKNOWLEDGEMENT",
-        consentEventId: input.consentEventId,
-        idempotencyKey: input.idempotencyKey,
-        requestHash,
-        sharedFields: input.sharedFields.join("|"),
-        version: 1,
-      },
-    });
+  // P2002 guard: concurrent double-submit with the same key — re-read and return duplicate/conflict.
+  let referral;
+  try {
+    referral = await db.$transaction(async (tx) => {
+      const created = await tx.referral.create({
+        data: {
+          userId: input.actor.userId,
+          providerServiceId: input.providerServiceId,
+          assessmentResultId: input.assessmentResultId ?? null,
+          state: "PENDING_PROVIDER_ACKNOWLEDGEMENT",
+          consentEventId: input.consentEventId,
+          idempotencyKey: input.idempotencyKey,
+          requestHash,
+          sharedFields: input.sharedFields.join("|"),
+          version: 1,
+        },
+      });
     await tx.referralEvent.create({
       data: {
         referralId: created.id,
@@ -135,11 +145,21 @@ export async function createReferral(input: CreateReferralInput): Promise<{ refe
         aggregateType: "referral",
         aggregateId: created.id,
         eventType: "REFERRAL_CREATED",
+        dedupKey: `referral:${created.id}:CREATED:v1`,
         payloadRedacted: JSON.stringify({ providerServiceId: input.providerServiceId, demo: service.provider.demoData }),
       },
     });
-    return created;
-  });
+      return created;
+    });
+  } catch (e) {
+    // Concurrent winner already inserted: re-read by key → duplicate (same hash) or conflict.
+    const raced = await db.referral.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+    if (raced) {
+      if (raced.requestHash !== requestHash) throw new MorivaError("REQUEST_IDEMPOTENCY_CONFLICT");
+      return { referral: { id: raced.id, state: raced.state as ReferralState, version: raced.version }, duplicate: true };
+    }
+    throw e;
+  }
 
   await audit({
     actorId: input.actor.userId, actorRole: input.actor.role, subjectId: input.actor.userId,
@@ -170,19 +190,20 @@ export async function createReferral(input: CreateReferralInput): Promise<{ refe
  * masquerade as a real provider handoff.
  */
 async function simulateDelivery(referralId: string, demo: boolean) {
-  const pending = await db.outboxEvent.findFirst({ where: { aggregateId: referralId, eventType: "REFERRAL_CREATED", status: "PENDING" } });
-  if (!pending) return;
-  await db.$transaction(async (tx) => {
-    await tx.outboxEvent.update({ where: { id: pending.id }, data: { status: "PUBLISHED", publishedAt: new Date(), attempts: 1 } });
-    await tx.referralEvent.create({
-      data: {
-        referralId,
-        eventType: "DELIVERY_SIMULATED",
-        actorType: "SYSTEM",
-        evidenceSource: "SIMULATED",
-        metadataJson: JSON.stringify({ transport: "none", demo, note: "No external provider transport exists in this prototype." }),
-      },
-    });
+  // Atomic claim: only one dispatcher wins the PENDING → PUBLISHED transition.
+  const claimed = await db.outboxEvent.updateMany({
+    where: { aggregateId: referralId, eventType: "REFERRAL_CREATED", status: "PENDING" },
+    data: { status: "PUBLISHED", publishedAt: new Date(), claimedAt: new Date(), attempts: 1 },
+  });
+  if (claimed.count === 0) return;
+  await db.referralEvent.create({
+    data: {
+      referralId,
+      eventType: "DELIVERY_SIMULATED",
+      actorType: "SYSTEM",
+      evidenceSource: "SIMULATED",
+      metadataJson: JSON.stringify({ transport: "none", demo, note: "No external provider transport exists in this prototype." }),
+    },
   });
 }
 
@@ -244,6 +265,8 @@ export async function transitionReferral(input: TransitionInput) {
     const userAllowed: Partial<Record<ReferralState, boolean>> = {
       CANCELLED_BY_USER: true,
       CONTACT_CONFIRMED: true, // patient-reported contact
+      FOLLOW_UP_DUE: true,
+      FOLLOW_UP_COMPLETED: true,
       WITHDRAWN_CONSENT: true,
     };
     if (!userAllowed[input.to]) {
@@ -301,6 +324,7 @@ export async function transitionReferral(input: TransitionInput) {
         aggregateType: "referral",
         aggregateId: referral.id,
         eventType: "REFERRAL_STATE_CHANGED",
+        dedupKey: `referral:${referral.id}:${input.to}:v${input.expectedVersion}`,
         payloadRedacted: JSON.stringify({ from, to: input.to }),
       },
     });
@@ -317,12 +341,17 @@ export async function transitionReferral(input: TransitionInput) {
   return { referral: updated, from, to: input.to };
 }
 
-export async function listUserReferrals(userId: string) {
-  return db.referral.findMany({
-    where: { userId },
+export async function listUserReferrals(userId: string, opts: { limit?: number; cursor?: string | null } = {}) {
+  const limit = Math.min(100, Math.max(1, opts.limit ?? 20));
+  const rows = await db.referral.findMany({
+    where: { userId, ...(opts.cursor ? { updatedAt: { lt: new Date(opts.cursor) } } : {}) },
     orderBy: { updatedAt: "desc" },
+    take: limit + 1,
     include: { providerService: { include: { provider: true } }, events: { orderBy: { occurredAt: "asc" } } },
   });
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  return { items, nextCursor: hasMore ? items[items.length - 1].updatedAt.toISOString() : null, hasMore };
 }
 
 export async function getOwnedReferral(userId: string, referralId: string) {

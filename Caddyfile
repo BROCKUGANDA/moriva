@@ -1,23 +1,67 @@
+# Sandbox reverse proxy (local demo only — port 81).
+# Production uses the prod block below. The legacy XTransformPort open-proxy
+# has been removed: it allowed arbitrary localhost port proxying (SSRF).
 :81 {
-	@transform_port_query {
-		query XTransformPort=*
-	}
-
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
+	handle /api/health* {
+		reverse_proxy localhost:3000 {
 			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-For {remote}
 			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Host {host}
+			header_up X-Real-IP {remote}
 		}
 	}
-
 	handle {
 		reverse_proxy localhost:3000 {
 			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-For {remote}
 			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Host {host}
+			header_up X-Real-IP {remote}
 		}
 	}
 }
+
+# Production block (fill MORIVA_DOMAIN, enable when deploying):
+# MORIVA_DOMAIN:443 {
+# 	tls {
+# 		protocols tls1.2 tls1.3
+# 	}
+# 	encode gzip zstd
+# 	log {
+# 		output stdout
+# 		format json
+# 	}
+# 	header {
+# 		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+# 		X-Frame-Options "DENY"
+# 		X-Content-Type-Options "nosniff"
+# 		Referrer-Policy "strict-origin-when-cross-origin"
+# 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+# 		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+# 		-Server
+# 	}
+# 	handle /api/health* {
+# 		reverse_proxy app:3000 {
+# 			lb_try_duration 5s
+# 			lb_try_interval 500ms
+# 			health_uri /api/health
+# 			health_interval 30s
+# 			health_timeout 5s
+# 			header_up Host {host}
+# 			header_up X-Forwarded-For {remote}
+# 			header_up X-Forwarded-Proto {scheme}
+# 			header_up X-Forwarded-Host {host}
+# 			header_up X-Real-IP {remote}
+# 		}
+# 	}
+# 	handle {
+# 		reverse_proxy app:3000 {
+# 			header_up Host {host}
+# 			header_up X-Forwarded-For {remote}
+# 			header_up X-Forwarded-Proto {scheme}
+# 			header_up X-Forwarded-Host {host}
+# 			header_up X-Real-IP {remote}
+# 		}
+# 	}
+# }

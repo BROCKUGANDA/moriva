@@ -23,7 +23,7 @@ const FIELD_DESCRIPTIONS: Record<string, string> = {
  * POST /api/v1/referrals/preview — exact share preview before consent capture (FR-CN-005).
  * Shows exactly what will be shared, with whom, retention and consent scope. No writes.
  */
-export const POST = withApi({ rate: "write", csrf: true })(async ({ req }) => {
+export const POST = withApi({ rate: "write", csrf: true })(async ({ req, requestId }) => {
   const user = await requireUser();
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) throw new MorivaError("VALIDATION_FAILED");
@@ -69,7 +69,6 @@ export const POST = withApi({ rate: "write", csrf: true })(async ({ req }) => {
         consentExpiryNote: "This consent covers this referral to this provider only. A different provider or additional fields require new consent.",
         simulated: service.provider.demoData,
       },
-    },
-    ""
+    }, requestId
   );
 });
