@@ -24,6 +24,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run db:generate
       - run: bun run typecheck
-      - run: npx eslint src
+      - run: bun run lint:src
       - run: bun run test:unit
       - run: bun run build
