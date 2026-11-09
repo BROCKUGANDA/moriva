@@ -18,6 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Reclaim disk before build
+        run: |
+          docker builder prune -af >/dev/null 2>&1 || true
+          docker image prune -f >/dev/null 2>&1 || true
+          df -h /var/lib/docker | tail -1
+
       - name: Build image
         run: |
           set -euo pipefail
@@ -54,4 +60,11 @@ jobs:
 
       - name: Prune old images
         if: success()
-        run: docker image prune -f --filter "until=168h" >/dev/null 2>&1 || true
+        run: |
+          set -euo pipefail
+          docker image prune -f --filter "until=168h" >/dev/null 2>&1 || true
+          # keep the current image plus the five most recent moriva builds
+          docker images --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
+            | grep '^moriva-app:' | grep -v ':current' | tail -n +6 \
+            | awk '{print $2}' | xargs -r docker rmi -f >/dev/null 2>&1 || true
+          df -h /var/lib/docker | tail -1
