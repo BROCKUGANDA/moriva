@@ -16,13 +16,14 @@ jobs:
   build-test:
     runs-on: [self-hosted, moriva]
     timeout-minutes: 30
+    env:
+      DATABASE_URL: file:./db/ci.db
+      DEMO_MODE: "true"
     steps:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
+      - run: bun run db:generate
       - run: bun run typecheck
       - run: npx eslint src
       - run: bun run test:unit
       - run: bun run build
-        env:
-          DATABASE_URL: file:./db/ci.db
-          DEMO_MODE: "true"
