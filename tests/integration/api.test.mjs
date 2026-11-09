@@ -14,11 +14,14 @@ function client() {
   return {
     async req(method, path, { body, headers = {}, expectCookie = true } = {}) {
       const cookieHeader = Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join("; ");
+      const hasIdempotencyKey = Object.keys(headers).some((k) => k.toLowerCase() === "idempotency-key");
+      const mutating = method !== "GET" && method !== "HEAD";
       const res = await fetch(BASE + path, {
         method,
         headers: {
           ...(body ? { "Content-Type": "application/json" } : {}),
           ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+          ...(mutating && !hasIdempotencyKey ? { "Idempotency-Key": unique() } : {}),
           ...headers,
         },
         body: body ? JSON.stringify(body) : undefined,
@@ -173,12 +176,12 @@ describe("assessment engine", () => {
     }
     const done = await a.req("POST", `/api/v1/assessment-sessions/${sid}/complete`, { headers: { "x-csrf-token": a.csrf } });
     expect(done.status).toBe(200);
-    expect(done.json.scored).toBe(true);
-    expect(done.json.interpretationCode).toBe("DEMO_STEADIER"); // 11 points
+    expect(done.json.result.scored).toBe(true);
+    expect(done.json.result.interpretationCode).toBe("DEMO_STEADIER"); // 11 points
     const again = await a.req("POST", `/api/v1/assessment-sessions/${sid}/complete`, { headers: { "x-csrf-token": a.csrf } });
     expect(again.status).toBe(200);
-    expect(again.json.resultId).toBe(done.json.resultId);
-    return { sessionId: sid, resultId: done.json.resultId };
+    expect(again.json.result.resultId).toBe(done.json.result.resultId);
+    return { sessionId: sid, resultId: done.json.result.resultId };
   });
 });
 
@@ -213,7 +216,7 @@ describe("provider directory eligibility", () => {
   it("expired/suspended listings are excluded from search results", async () => {
     const r = await a.req("GET", "/api/v1/providers");
     expect(r.status).toBe(200);
-    const statuses = r.json.providers.map((p) => p.verificationStatus);
+    const statuses = (r.json.data ?? []).map((p) => p.verificationStatus);
     expect(statuses).not.toContain("EXPIRED");
     expect(statuses).not.toContain("SUSPENDED");
     expect(statuses).not.toContain("PENDING");
@@ -232,7 +235,7 @@ describe("referral workflow — consent, idempotency, role isolation", () => {
     // target the PRIMARY CARE service (providers are alphabetical: Mental Health first).
     // The coordinator demo account owns the mental-health org — so a referral to primary care
     // is genuinely outside their assignment scope, which the denial test below relies on.
-    const primaryCare = r.json.providers.find((p) => p.displayName.includes("Primary Care"));
+    const primaryCare = (r.json.data ?? []).find((p) => p.displayName.includes("Primary Care"));
     referrableServiceId = primaryCare.services[0].id;
     providerId = primaryCare.id;
   });
@@ -281,7 +284,7 @@ describe("referral workflow — consent, idempotency, role isolation", () => {
 
     // exactly one referral created for this key
     const list = await a.req("GET", "/api/v1/referrals");
-    const matches = list.json.referrals.filter((r) => r.id === referralId);
+    const matches = (list.json.data ?? []).filter((r) => r.id === referralId);
     expect(matches.length).toBe(1);
   });
 
@@ -297,7 +300,7 @@ describe("referral workflow — consent, idempotency, role isolation", () => {
     const r1 = await b.req("GET", `/api/v1/referrals/${referralId}`);
     expect(r1.status).toBe(404);
     const r2 = await b.req("GET", `/api/v1/assessment-sessions`);
-    const ids = r2.json.sessions.map((s) => s.id);
+    const ids = (r2.json.data ?? []).map((s) => s.id);
     expect(ids).not.toContain(referralId);
   });
 
@@ -378,7 +381,7 @@ describe("referral workflow — consent, idempotency, role isolation", () => {
     // find the expired provider service via ops view
     const opsView = await ops.req("GET", "/api/v1/ops/providers");
     expect(opsView.status).toBe(200);
-    const expiredProvider = opsView.json.providers.find((p) => p.verificationStatus === "EXPIRED");
+    const expiredProvider = (opsView.json.data ?? []).find((p) => p.verificationStatus === "EXPIRED");
     expect(expiredProvider).toBeTruthy();
     const expiredServiceId = expiredProvider.services[0].id;
     // even with a fresh consent grant, the referral must be refused
@@ -405,7 +408,7 @@ describe("privacy centre", () => {
     const del = await b.req("POST", "/api/v1/me/data-requests", { body: { requestType: "DELETION" }, headers: { "x-csrf-token": b.csrf } });
     expect(del.status).toBe(201);
     const list = await b.req("GET", "/api/v1/me/data-requests");
-    expect(list.json.requests.length).toBeGreaterThanOrEqual(2);
+    expect((list.json.data ?? []).length).toBeGreaterThanOrEqual(2);
   });
 
   it("ops admin cannot read journals (no endpoint exists); ops audit view is read-only", async () => {
