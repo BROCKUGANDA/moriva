@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export function IndividualOverviewActions() {
+  const router = useRouter();
   const [checkedIn, setCheckedIn] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +23,7 @@ export function IndividualOverviewActions() {
       });
       if (res.ok) {
         setCheckedIn(["", "Rough", "Low", "Okay", "Good"][v]);
-        setTimeout(() => window.location.reload(), 600);
+        setTimeout(() => router.refresh(), 600);
       } else {
         const body = await res.json().catch(() => null);
         setError(body?.message ?? "Could not save your check-in. Please try again.");

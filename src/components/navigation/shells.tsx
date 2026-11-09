@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { MorivaLogo } from "@/components/moriva/brand";
 import { useLocale } from "@/components/moriva/locale-provider";
@@ -212,10 +212,12 @@ export function IndividualBottomNav() {
 
 export function SignOutButton({ label }: { label: string }) {
   const { t } = useLocale();
+  const router = useRouter();
   async function signOut() {
     const csrf = document.cookie.split("; ").find((c) => c.startsWith("moriva_csrf="))?.split("=")[1] ?? "";
     await fetch("/api/v1/auth/logout", { method: "POST", headers: { "x-csrf-token": csrf } });
-    window.location.href = "/";
+    router.push("/");
+    router.refresh();
   }
   return (
     <button onClick={signOut} className="min-h-11 rounded-lg px-3 py-2 text-sm font-medium text-moriva-slate hover:bg-secondary">

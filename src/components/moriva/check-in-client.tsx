@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/components/moriva/locale-provider";
 
 export function CheckInClient() {
   const { t } = useLocale();
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +24,7 @@ export function CheckInClient() {
       });
       if (res.ok) {
         setDone(true);
-        setTimeout(() => (window.location.href = "/app"), 800);
+        setTimeout(() => router.push("/app"), 800);
       } else {
         const body = await res.json().catch(() => null);
         setError(body?.message ?? "Could not save your check-in. Please try again.");

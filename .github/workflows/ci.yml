@@ -19,9 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
-      - run: bunx tsc --noEmit
+      - run: bun run typecheck
       - run: npx eslint src
-      - run: bunx vitest run
+      - run: bun run test:unit
       - run: bun run build
         env:
           DATABASE_URL: file:./db/ci.db

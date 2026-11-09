@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { InlineNotice, StatusBadge } from "@/components/moriva/status";
 import { getDictionary } from "@/i18n/dictionaries";
@@ -24,6 +25,7 @@ const STATUS_COPY: Record<string, { label: string; tone: "success" | "neutral" |
  * Assessment picker + list of the signed-in person's sessions.
  */
 export function AssessmentList() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [instruments, setInstruments] = useState<Array<{
     id: string; displayName: string; ownerSource: string; construct: string;
@@ -56,7 +58,7 @@ export function AssessmentList() {
     try {
       const res = await fetch("/api/v1/assessment-sessions", { method: "POST", headers: { "x-csrf-token": csrf, "Idempotency-Key": `session-${Date.now()}` } });
       const body = await res.json().catch(() => null);
-      if (res.ok) window.location.href = `/app/assessments/${body.sessionId}`;
+      if (res.ok) router.push(`/app/assessments/${body.sessionId}`);
       else setStartError(body?.message ?? "Could not start the assessment.");
     } finally {
       setStarting(false);

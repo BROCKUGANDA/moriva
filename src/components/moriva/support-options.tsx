@@ -141,7 +141,6 @@ function ProvidersForOption({ ids }: { ids: string[] }) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   if (ids.length === 0) return <p className="text-xs text-moriva-slate">No matching verified services to list right now.</p>;
   if (providers === null) return <div className="h-10 w-full animate-pulse rounded bg-muted" aria-busy="true" />;

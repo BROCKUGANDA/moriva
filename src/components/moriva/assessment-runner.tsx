@@ -38,10 +38,12 @@ export function AssessmentRunner({ sessionId }: { sessionId: string }) {
   const [urgent, setUrgent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [csrf, setCsrf] = useState("");
+
+  function getCsrf() {
+    return document.cookie.split("; ").find((c) => c.startsWith("moriva_csrf="))?.split("=")[1] ?? "";
+  }
 
   useEffect(() => {
-    setCsrf(document.cookie.split("; ").find((c) => c.startsWith("moriva_csrf="))?.split("=")[1] ?? "");
     fetch(`/api/v1/assessment-sessions/${sessionId}`)
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => null))?.message ?? "Failed to load");
@@ -67,7 +69,7 @@ export function AssessmentRunner({ sessionId }: { sessionId: string }) {
     try {
       const res = await fetch(`/api/v1/assessment-sessions/${sessionId}/responses/${item.itemKey}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        headers: { "Content-Type": "application/json", "x-csrf-token": getCsrf() },
         body: JSON.stringify({ value }),
       });
       const body = await res.json().catch(() => null);
@@ -103,7 +105,7 @@ export function AssessmentRunner({ sessionId }: { sessionId: string }) {
     try {
       const res = await fetch(`/api/v1/assessment-sessions/${sessionId}/complete`, {
         method: "POST",
-        headers: { "x-csrf-token": csrf, "Idempotency-Key": `complete-${sessionId}` },
+        headers: { "x-csrf-token": getCsrf(), "Idempotency-Key": `complete-${sessionId}` },
       });
       const body = await res.json().catch(() => null);
       if (res.ok) {
