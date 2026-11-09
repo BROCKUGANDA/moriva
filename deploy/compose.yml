@@ -7,6 +7,9 @@ services:
     restart: unless-stopped
     env_file:
       - /mnt/data/moriva/.env
+    environment:
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
     volumes:
       - /mnt/data/moriva/db:/app/db
     healthcheck:

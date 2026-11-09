@@ -34,14 +34,16 @@ jobs:
       - name: Smoke test
         run: |
           set -euo pipefail
+          HOST="moriva.57.130.80.158.sslip.io"
           for i in $(seq 1 40); do
-            if curl -fsS -H 'Host: moriva.57.130.80.158.sslip.io' http://127.0.0.1:8086/api/health | grep -q '"status":"ready"'; then
+            if curl -fsS --resolve "$HOST:8449:127.0.0.1" "https://$HOST:8449/api/health" | grep -q '"status":"ready"'; then
               echo "healthy"; exit 0
             fi
             sleep 5
           done
           echo "health check failed"
           docker logs moriva-app-1 --tail 120 || true
+          docker logs moriva-edge-caddy-1 --tail 40 || true
           exit 1
 
       - name: Prune old images
