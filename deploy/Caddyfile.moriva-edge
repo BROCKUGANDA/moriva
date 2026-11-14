@@ -1,4 +1,4 @@
-{$MORIVA_HOST:moriva.57.130.80.158.sslip.io} {
+{$MORIVA_HOST:moriva.57.130.80.158.sslip.io}, moriva.svalley.tech {
 	encode gzip zstd
 
 	header {
@@ -15,6 +15,30 @@
 		format json
 	}
 
+	reverse_proxy app:3000 {
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+		header_up X-Real-IP {remote_host}
+	}
+}
+
+# AI AZIMARA group domain â€” Cloudflare Origin CA wildcard cert (*.aiazimara.com),
+# because Cloudflare proxies this zone and ACME HTTP-01 cannot complete through it.
+moriva.aiazimara.com, www.moriva.aiazimara.com {
+	tls /data/certs/aiazimara.com.pem /data/certs/aiazimara.com.key
+	encode gzip zstd
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		-Server
+	}
+	log {
+		output stdout
+	}
 	handle /api/health* {
 		reverse_proxy app:3000 {
 			header_up Host {host}
@@ -23,7 +47,35 @@
 			header_up X-Real-IP {remote_host}
 		}
 	}
+	handle {
+		reverse_proxy app:3000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}
 
+# ── HTTP → app (Cloudflare talks HTTP to the origin; zone is not Full) ───────
+http://moriva.aiazimara.com, http://www.moriva.aiazimara.com {
+	encode gzip zstd
+
+	header {
+		-Server
+	}
+
+	log {
+		output stdout
+	}
+	handle /api/health* {
+		reverse_proxy app:3000 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
 	handle {
 		reverse_proxy app:3000 {
 			header_up Host {host}
